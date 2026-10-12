@@ -1,0 +1,71 @@
+{
+    "meta": {
+        "fileName": "d_profileNP.rel",
+        "type": "REL",
+        "defaultCompilerFlags": "-sdata 0 -sdata2 0 -proc gekko -fp hard -O4,p -inline noauto -char signed -rtti off -enum int -Cpp_exceptions off -ipa file -enc SJIS",
+        "moduleNum": 1,
+        "baseAddr": "807685A0",
+        "sections": {
+            "":                     { "index": 0,  "align": 0, "size": "0x0" },
+            ".text":                { "index": 1,  "align": 16, "size": "0x1fb8" },
+            ".ctors":               { "index": 2,  "align": 4, "size": "0x4" },
+            ".dtors":               { "index": 3,  "align": 4, "size": "0x8" },
+            ".rodata":              { "index": 4,  "align": 8, "size": "0x1d8" },
+            ".data":                { "index": 5,  "align": 8, "size": "0x15fc" },
+            ".bss":                 { "index": 6,  "align": 8, "size": "0x208" },
+            ".rela.text":           { "index": 7,  "align": 4, "size": "0x0" },
+            ".rela.ctors":          { "index": 8,  "align": 4, "size": "0x0" },
+            ".rela.dtors":          { "index": 9,  "align": 4, "size": "0x0" },
+            ".rela.rodata":         { "index": 10, "align": 4, "size": "0x0" },
+            ".mwcats.text":         { "index": 11, "align": 4, "size": "0x0" },
+            ".rela.mwcats.text":    { "index": 12, "align": 4, "size": "0x0" },
+            ".symtab":              { "index": 13, "align": 4, "size": "0x0" },
+            ".shstrtab":            { "index": 14, "align": 1, "size": "0x0" },
+            ".strtab":              { "index": 15, "align": 1, "size": "0x0" },
+            ".comment":             { "index": 16, "align": 4, "size": "0x0" },
+            ".PPC.EMB.apuinfo":     { "index": 17, "align": 16, "size": "0x0" }
+        }
+    },
+    "slices": [
+        {
+            "source": "runtime/rel_init.cpp",
+            "memoryRanges": {
+                ".text": "0x0-0x70"
+            }
+        },
+        {
+            "source": "runtime/global_destructor_chain.c",
+            "compilerFlags": "-c -Cpp_exceptions off -O4 -fp hard -sdata 0 -sdata2 0",
+            "memoryRanges": {
+                ".text": "0x70-0xf0",
+                ".dtors": "0x0-0x8",
+                ".bss": "0x0-0x8"
+            }
+        },
+        {
+            "source": "d_profileNP/d_profile.cpp",
+            "memoryRanges": {
+                ".text": "0xf0-0x130",
+                ".data": "0x0-0xbb8"
+            }
+        },
+        {
+            "source": "d_profileNP/bases/d_controller_information.cpp",
+            "memoryRanges": {
+                ".text": "0x130-0x4e0",
+                ".data": "0xbb8-0xd28",
+                ".rodata": "0x0-0x18"
+            }
+        },
+        {
+            "source": "d_profileNP/bases/d_yes_no_window.cpp",
+            "memoryRanges": {
+                ".text": "0x4e0-0x1fb8",
+                ".ctors": "0x0-0x4",
+                ".data": "0xd28-0x15fc",
+                ".rodata": "0x18-0x1d8",
+                ".bss": "0x8-0x208"
+            }
+        }
+    ]
+}

@@ -1,0 +1,21 @@
+object: orig/main.dol
+hash: 26c5fae84e9a43cf39f101265bf03589e85e3bec
+symbols: config/symbols.txt
+splits: config/splits.txt
+modules:
+- object: orig/d_profileNP.rel
+  symbols: config/d_profileNP/symbols.txt
+  splits: config/d_profileNP/splits.txt
+  hash: f4c244673ac32496b252dc672657ffdaec3426c8
+- object: orig/d_basesNP.rel
+  symbols: config/d_basesNP/symbols.txt
+  splits: config/d_basesNP/splits.txt
+  hash: afefa38b687600cc0b622d9370c286112198b8c4
+- object: orig/d_enemiesNP.rel
+  symbols: config/d_enemiesNP/symbols.txt
+  splits: config/d_enemiesNP/splits.txt
+  hash: e7a9e1222bd0bcaa653cbbd46e67a3f9e57dcde8
+- object: orig/d_en_bossNP.rel
+  symbols: config/d_en_bossNP/symbols.txt
+  splits: config/d_en_bossNP/splits.txt
+  hash: 216e64f3deaddae473fb457985bb75c5887af8d9

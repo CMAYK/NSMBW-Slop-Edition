@@ -1,0 +1,25 @@
+# Game data (copyrighted, never commit)
+*.rvz
+*.iso
+*.wbfs
+extracted/
+game/
+recomp/orig/
+recomp/linked/
+recomp/build/
+recomp/nand/
+
+# Generated / build output
+recomp/out/
+recomp/_sync/
+recomp/.dbg/
+.dbg/
+__pycache__/
+*.pyc
+
+# Runtime files written by the game
+*.log
+nsmbw_log.txt
+nsmbw_profile.txt
+shadercache.bin
+settings.ini

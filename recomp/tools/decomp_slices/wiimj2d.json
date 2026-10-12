@@ -1,0 +1,1140 @@
+{
+    "meta": {
+        "fileName": "wiimj2d.dol",
+        "type": "DOL",
+        "moduleNum": 0,
+        "defaultCompilerFlags": "-proc gekko -fp hard -O4 -inline noauto -Cpp_exceptions off -enum int -RTTI off -ipa file -enc SJIS",
+        "sections": {
+            ".init":                { "index": 0,  "align": 16, "addr": "0x80004000", "size": "0x26bc" },
+            "extab":                { "index": 7,  "align": 16, "addr": "0x800066c0", "size": "0x48" },
+            "extabindex":           { "index": 8,  "align": 16, "addr": "0x80006720", "size": "0x5c" },
+            ".text":                { "index": 1,  "align": 16, "addr": "0x80006780", "size": "0x2e7544" },
+            ".ctors$10":            { "index": 9,  "align": 4,  "addr": "0x802edce0", "size": "0x4" },
+            ".ctors":               { "index": 9,  "align": 4,  "addr": "0x802edce0", "size": "0x2d0", "offset": "0x4" },
+            ".dtors$10":            { "index": 10, "align": 4,  "addr": "0x802edfc0", "size": "0x4" },
+            ".dtors$15":            { "index": 10, "align": 4,  "addr": "0x802edfc0", "size": "0x4", "offset": "0x4" },
+            ".dtors":               { "index": 10, "align": 4,  "addr": "0x802edfc0", "size": "0x4", "offset": "0x8" },
+            ".rodata":              { "index": 11, "align": 8,  "addr": "0x802edfe0", "size": "0x106b0" },
+            ".data":                { "index": 12, "align": 8,  "addr": "0x802fe6a0", "size": "0x532d0" },
+            ".bss":                 { "index": -1, "align": 8,  "addr": "0x80351980", "size": "0xd5ff0" },
+            ".sdata":               { "index": 13, "align": 8,  "addr": "0x80427980", "size": "0x251c" },
+            ".sbss":                { "index": -1, "align": 8,  "addr": "0x80429ea0", "size": "0x14a4" },
+            ".sdata2":              { "index": 14, "align": 8,  "addr": "0x8042b360", "size": "0x4b44" },
+            ".sbss2":               { "index": -1, "align": 8,  "addr": "0x8042fec0", "size": "0x5c" }
+        }
+    },
+    "deadstrip": [
+        "__dt__Q23EGG8Vector2fFv",
+        "__dt__Q23EGG8Vector3fFv",
+        "getPlrNo__8dActor_cFv",
+        "funsuiMoveX__8dActor_cFv",
+        "setCarryFall__8dActor_cFP8dActor_ci",
+        "isSpinLiftUpEnable__8dActor_cFv",
+        "__vt__12sStateIDIf_c",
+        "__vt__18sStateStateMgrIf_c",
+        "getOldStateID__14sStateMethod_cCFv",
+        "__dt__13cOwnerSetMg_cFv",
+        "__vt__Q26dRes_c10callback_c",
+        "List_Prepend__Q24nw4r2utFPQ34nw4r2ut4ListPv",
+        "__vt__Q23EGG5Fader",
+        "DUMMY_ORDERING__Fv",
+        "DUMMY_UNUSED__Fv",
+        "__destroy_global_chain_reference",
+        "play__Q23m3d6banm_cFv",
+        "getType__Q23m3d6bmdl_cCFv",
+        "getType__Q23m3d13anmChrBlend_cCFv",
+        "getType__Q23m3d8anmChr_cCFv",
+        "getType__Q23m3d8anmVis_cCFv",
+        "__dt__13dEnFumiNest_cFv",
+        "__vt__18sStateStateMgrIf_c",
+        "unlink__24DynamicModuleControlBaseFv"
+    ],
+    "keepWeak": [
+        "OSReport",
+        "changeState__99sStateStateMgr_c<18dActorMultiState_c,12sFStateMgr_c,20sStateMethodUsr_FI_c,20sStateMethodUsr_FI_c>FRC12sStateIDIf_c",
+        "__dt__85sFStateStateMgr_c<18dActorMultiState_c,20sStateMethodUsr_FI_c,20sStateMethodUsr_FI_c>Fv",
+        "__dt__99sStateStateMgr_c<18dActorMultiState_c,12sFStateMgr_c,20sStateMethodUsr_FI_c,20sStateMethodUsr_FI_c>Fv",
+        "__dt__57sFStateMgr_c<18dActorMultiState_c,20sStateMethodUsr_FI_c>Fv",
+        "__dt__87sStateMgr_c<18dActorMultiState_c,20sStateMethodUsr_FI_c,12sFStateFct_c,13sStateIDChk_c>Fv",
+        "__dt__34sFStateFct_c<18dActorMultiState_c>Fv",
+        "__dt__31sFState_c<18dActorMultiState_c>Fv",
+        "__dt__7mVec2_cFv",
+        "__dt__7mVec3_cFv",
+        "__dt__Q34nw4r3lyt19ArcResourceAccessorFv",
+        "GetRuntimeTypeInfo__Q34nw4r3lyt4PaneCFv",
+        "setPosParam__Q23EGG14CoreControllerFff",
+        "getFileSize__Q23EGG7DvdFileCFv",
+        "isItemKinopio__7dAcPy_cFv",
+        "__dt__11SndObjctEmyFv"
+    ],
+    "slices": [
+        {
+            "source": "dol/bases/d_2d.cpp",
+            "memoryRanges": {
+                ".text": "0x10-0xd90",
+                ".data": "0x0-0x88",
+                ".sbss": "0x0-0x8",
+                ".sdata": "0x0-0x8",
+                ".sdata2": "0x0-0x18"
+            }
+        },
+        {
+            "source": "dol/bases/d_CourseSelectGuide.cpp",
+            "memoryRanges": {
+                ".text": "0x9470-0xdbb0",
+                ".ctors": "0x8-0xc",
+                ".rodata": "0x0-0xc0",
+                ".data": "0x108-0x12d0",
+                ".bss": "0x20-0x828",
+                ".sdata": "0xc8-0xd8",
+                ".sbss": "0x38-0x48",
+                ".sdata2": "0xd0-0x100"
+            }
+        },
+        {
+            "source": "dol/bases/d_SmallScore.cpp",
+            "memoryRanges": {
+                ".text": "0xe790-0xf5e0",
+                ".bss": "0x828-0x868",
+                ".data": "0x1310-0x13a8",
+                ".rodata": "0xc0-0x160",
+                ".sbss": "0x48-0x68",
+                ".sdata": "0xd8-0xe0",
+                ".sdata2": "0x128-0x150"
+            }
+        },
+        {
+            "source": "dol/bases/d_wipe_circle.cpp",
+            "memoryRanges": {
+                ".text": "0x14c20-0x15410",
+                ".rodata": "0x358-0x380",
+                ".data": "0x2e00-0x2ec0",
+                ".bss": "0xf68-0xfd8",
+                ".sdata": "0x130-0x148",
+                ".sdata2": "0x168-0x178",
+                ".sbss": "0x70-0x78"
+            }
+        },
+        {
+            "source": "dol/bases/d_wipe_dokan.cpp",
+            "memoryRanges": {
+                ".text": "0x15410-0x159f0",
+                ".rodata": "0x380-0x3b8",
+                ".data": "0x2ec0-0x2fd0",
+                ".sdata": "0x148-0x150",
+                ".sbss": "0x78-0x80"
+            }
+        },
+        {
+            "source": "dol/bases/d_wipe_kuppa.cpp",
+            "memoryRanges": {
+                ".text": "0x159f0-0x15f10",
+                ".rodata": "0x3b8-0x3e0",
+                ".data": "0x2fd0-0x3088",
+                ".sdata": "0x150-0x168",
+                ".sbss": "0x80-0x88",
+                ".sdata2": "0x178-0x180"
+            }
+        },
+        {
+            "source": "dol/bases/d_wipe_mario.cpp",
+            "memoryRanges": {
+                ".text": "0x15f10-0x16430",
+                ".rodata": "0x3e0-0x408",
+                ".data": "0x3088-0x3140",
+                ".sdata": "0x168-0x180",
+                ".sbss": "0x88-0x90",
+                ".sdata2": "0x180-0x188"
+            }
+        },
+        {
+            "source": "dol/bases/d_a_boss_demo.cpp",
+            "memoryRanges": {
+                ".text": "0x16430-0x172d0",
+                ".ctors": "0x20-0x24",
+                ".data": "0x3140-0x3420",
+                ".bss": "0xfd8-0x10e8",
+                ".sdata": "0x180-0x190",
+                ".sbss": "0x90-0x98",
+                ".sdata2": "0x188-0x198",
+                ".sbss2": "0x0-0x8"
+            }
+        },
+        {
+            "source": "dol/bases/d_a_bullet.cpp",
+            "memoryRanges": {
+                ".text": "0x172d0-0x18f40",
+                ".ctors": "0x24-0x28",
+                ".data": "0x3420-0x3828",
+                ".bss": "0x10e8-0x12e8",
+                ".sdata2": "0x198-0x1d8"
+            }
+        },
+        {
+            "source": "dol/bases/d_a_en_carry.cpp",
+            "memoryRanges": {
+                ".text": "0x20430-0x20b70",
+                ".ctors": "0x34-0x38",
+                ".data": "0x4640-0x4978",
+                ".bss": "0x1728-0x1768",
+                ".sdata2": "0x2c8-0x2d0"
+            }
+        },
+        {
+            "source": "dol/bases/d_a_en_shell.cpp",
+            "memoryRanges": {
+                ".text": "0x31720-0x36270",
+                ".ctors": "0x60-0x64",
+                ".data": "0x75a0-0x7b30",
+                ".rodata": "0xa20-0xab0",
+                ".bss": "0x2358-0x2518",
+                ".sdata2": "0x520-0x618"
+            }
+        },
+        {
+            "source": "dol/bases/d_a_en_togezo_base.cpp",
+            "memoryRanges": {
+                ".text": "0x37450-0x3a1a0",
+                ".ctors": "0x68-0x6c",
+                ".data": "0x7fe8-0x8668",
+                ".rodata": "0xac0-0xb60",
+                ".bss": "0x2618-0x2880",
+                ".sbss": "0xb0-0xb8",
+                ".sdata": "0x250-0x268",
+                ".sdata2": "0x630-0x6a8"
+            }
+        },
+        {
+            "source": "dol/bases/d_a_player_base.cpp",
+            "memoryRanges": {
+                ".text": "0x3f950-0x54c20",
+                ".ctors": "0x7c-0x80",
+                ".bss": "0x2b90-0x35a0",
+                ".data": "0x9898-0xb268",
+                ".rodata": "0xc98-0xec0",
+                ".sbss": "0xc8-0xd0",
+                ".sdata2": "0x7c0-0x998"
+            }
+        },
+        {
+            "source": "dol/bases/d_ac_py_key.cpp",
+            "memoryRanges": {
+                ".text": "0x57850-0x58220"
+            }
+        },
+        {
+            "source": "dol/bases/d_actor.cpp",
+            "memoryRanges": {
+                ".text": "0x5d990-0x5f940",
+                ".ctors": "0x98-0x9c",
+                ".bss": "0x47c0-0x47e8",
+                ".data": "0xbbb0-0xbca0",
+                ".rodata": "0x1648-0x1660",
+                ".sdata": "0x290-0x2a0",
+                ".sbss": "0x138-0x170",
+                ".sdata2": "0xa88-0xb10"
+            }
+        },
+        {
+            "source": "dol/bases/d_actor_state.cpp",
+            "memoryRanges": {
+                ".text": "0x60830-0x618c0",
+                ".ctors": "0xa0-0xa4",
+                ".data": "0x10818-0x10c58",
+                ".bss": "0x47e8-0x4868"
+            }
+        },
+        {
+            "source": "dol/bases/d_actorcreate_manager.cpp",
+            "memoryRanges": {
+                ".text": "0x618c0-0x628a0",
+                ".rodata": "0x16a8-0x16b8",
+                ".sdata2": "0xb40-0xb68",
+                ".sbss": "0x188-0x190"
+            }
+        },
+        {
+            "source": "dol/bases/d_base.cpp",
+            "memoryRanges": {
+                ".text": "0x65ca0-0x65f50",
+                ".data": "0x10e18-0x10e88",
+                ".sbss": "0x1d0-0x1d8"
+            }
+        },
+        {
+            "source": "dol/bases/d_base_actor.cpp",
+            "memoryRanges": {
+                ".text": "0x65f50-0x667c0",
+                ".ctors": "0xa8-0xac",
+                ".data": "0x10e88-0x10ee8",
+                ".sbss": "0x1d8-0x1e8",
+                ".sdata2": "0xbb0-0xbc0"
+            }
+        },
+        {
+            "source": "dol/bases/d_cc.cpp",
+            "memoryRanges": {
+                ".text": "0x85a80-0x87500",
+                ".ctors": "0xc0-c4",
+                ".rodata": "0x2408-0x2418",
+                ".data": "0x12a00-0x12a60",
+                ".sbss": "0x2a0-0x2b0",
+                ".sdata2": "0xf80-0xfa0"
+            }
+        },
+        {
+            "source": "dol/bases/d_center_save_mng.cpp",
+            "memoryRanges": {
+                ".text": "0x87500-0x87750",
+                ".ctors": "0xc4-0xc8",
+                ".sbss": "0x2b0-0x2c0"
+            }
+        },
+        {
+            "source": "dol/bases/d_coin.cpp",
+            "memoryRanges": {
+                ".text": "0x87750-0x87870",
+                ".ctors": "0xc8-0xcc",
+                ".sbss": "0x2c0-0x2d8",
+                ".sdata2": "0xfa0-0xfa8"
+            }
+        },
+        {
+            "source": "dol/bases/d_cd.cpp",
+            "memoryRanges": {
+                ".text": "0x87870-0x88540",
+                ".rodata": "0x2418-0x2450",
+                ".data": "0x12a60-0x12a90",
+                ".sdata2": "0xfa8-0xfb8"
+            }
+        },
+        {
+            "source": "dol/bases/d_curtain_mng.cpp",
+            "memoryRanges": {
+                ".text": "0x88540-0x885f0",
+                ".sdata2": "0xfb8-0xfc0"
+            }
+        },
+        {
+            "source": "dol/bases/d_cyuukan.cpp",
+            "memoryRanges": {
+                ".text": "0x885f0-0x88990",
+                ".data": "0x12a90-0x12aa0",
+                ".sdata2": "0xfc0-0xfc8"
+            }
+        },
+        {
+            "source": "dol/bases/d_dylink.cpp",
+            "memoryRanges": {
+                ".text": "0x88ce0-0x891a0",
+                ".ctors": "0xcc-0xd0",
+                ".data": "0x12ab0-0x12b38",
+                ".sdata": "0x388-0x390",
+                ".bss": "0x4928-0x4980",
+                ".sbss": "0x2f0-0x310",
+                ".sdata2": "0xfc8-0xfd0"
+            }
+        },
+        {
+            "source": "dol/bases/d_enemy.cpp",
+            "memoryRanges": {
+                ".text": "0x8e700-0x91bd0",
+                ".rodata": "0x27b0-0x27e0",
+                ".data": "0x13810-0x13be8",
+                ".bss": "0x5fb8-0x6028",
+                ".sbss": "0x340-0x348",
+                ".sdata2": "0x1120-0x11a8"
+            }
+        },
+        {
+            "source": "dol/bases/d_enemy_boss.cpp",
+            "memoryRanges": {
+                ".text": "0x91bd0-0x94520",
+                ".ctors": "0xd8-0xdc",
+                ".data": "0x13be8-0x142a0",
+                ".bss": "0x6028-0x61e8",
+                ".sdata2": "0x11a8-0x11b0",
+                ".sbss2": "0x8-0x10"
+            }
+        },
+        {
+            "source": "dol/bases/d_enemy_carry.cpp",
+            "memoryRanges": {
+                ".text": "0x98370-0x98e70",
+                ".ctors": "0xe0-0xe4",
+                ".rodata": "0x2808-0x2828",
+                ".data": "0x14d50-0x150e8",
+                ".bss": "0x64a8-0x6528",
+                ".sdata2": "0x1228-0x1250"
+            }
+        },
+        {
+            "source": "dol/bases/d_enemy_death.cpp",
+            "memoryRanges": {
+                ".text": "0x99040-0x9c0f0",
+                ".ctors": "0xe4-0xe8",
+                ".rodata": "0x2880-0x2ae0",
+                ".data": "0x150e8-0x15360",
+                ".bss": "0x6528-0x6750",
+                ".sbss": "0x348-0x350",
+                ".sdata2": "0x1250-0x12a8"
+            }
+        },
+        {
+            "source": "dol/bases/d_enemy_state.cpp",
+            "memoryRanges": {
+                ".text": "0xa1620-0xa1f90",
+                ".ctors": "0xec-0xf0",
+                ".data": "0x15b30-0x15cc0",
+                ".bss": "0x6978-0x6ab8",
+                ".sdata2": "0x1380-0x1388"
+            }
+        },
+        {
+            "source": "dol/bases/d_lytbase.cpp",
+            "memoryRanges": {
+                ".text": "0xc2220-0xc33d0",
+                ".ctors": "0x11c-0x120",
+                ".rodata": "0x3338-0x33a0",
+                ".data": "0x19098-0x190e0",
+                ".sdata": "0x588-0x598",
+                ".bss": "0x7de0-0x7eb8",
+                ".sdata2": "0x1878-0x1898"
+            }
+        },
+        {
+            "source": "dol/bases/d_lyttextbox.cpp",
+            "memoryRanges": {
+                ".text": "0xc33d0-0xc3880",
+                ".sdata": "0x598-0x5a0",
+                ".sdata2": "0x1898-0x18b8",
+                ".bss": "0x7eb8-0x82b8"
+            }
+        },
+        {
+            "source": "dol/bases/d_main.cpp",
+            "memoryRanges": {
+                ".text": "0xc3880-0xc39d0",
+                ".bss": "0x82b8-0x85d0",
+                ".sbss": "0x3d8-0x3e0"
+            }
+        },
+        {
+            "source": "dol/bases/d_md_actor.cpp",
+            "memoryRanges": {
+                ".text": "0xc7080-0xc73e0",
+                ".ctors": "0x128-0x12c",
+                ".data": "0x19568-0x195f0",
+                ".bss": "0x8600-0x8610",
+                ".sdata": "0x5e0-0x5f0",
+                ".sbss": "0x3e8-0x3f0",
+                ".sdata2": "0x1918-0x1930"
+            }
+        },
+        {
+            "source": "dol/bases/d_message.cpp",
+            "memoryRanges": {
+                ".text": "0xc73e0-0xc7830",
+                ".ctors": "0x12c-0x130",
+                ".data": "0x195f0-0x19618",
+                ".bss": "0x8610-0x8638"
+            }
+        },
+        {
+            "source": "dol/bases/d_mj2d_data.cpp",
+            "memoryRanges": {
+                ".text": "0xc7830-0xc8070",
+                ".rodata": "0x3470-0x3480",
+                ".sdata": "0x5f0-0x5f8"
+            }
+        },
+        {
+            "source": "dol/bases/d_msg_res.cpp",
+            "memoryRanges": {
+                ".text": "0xc8070-0xc8170",
+                ".data": "0x19618-0x19628"
+            }
+        },
+        {
+
+            "source": "dol/bases/d_multi_manager.cpp",
+            "memoryRanges": {
+                ".text": "0xc8170-0xc8580",
+                ".rodata": "0x3480-0x3490",
+                ".data": "0x19628-0x19638",
+                ".sbss": "0x3f0-0x3f8",
+                ".sdata2": "0x1930-0x1938"
+            }
+        },
+        {
+
+            "source": "dol/bases/d_next.cpp",
+            "memoryRanges": {
+                ".text": "0xc9560-0xc9c40",
+                ".sbss": "0x400-0x408",
+                ".sdata2": "0x1938-0x1950"
+            }
+        },
+        {
+            "source": "dol/bases/d_rail.cpp",
+            "memoryRanges": {
+                ".text": "0xd2a30-0xd30d0",
+                ".data": "0x1a9f0-0x1aa00",
+                ".sdata2": "0x1ba0-0x1bb8"
+            }
+        },
+        {
+            "source": "dol/bases/d_res_info.cpp",
+            "memoryRanges": {
+                ".text": "0xd82b0-0xd88c0",
+                ".data": "0x1b1a0-0x1b1c8"
+            }
+        },
+        {
+            "source": "dol/bases/d_res.cpp",
+            "memoryRanges": {
+                ".text": "0xd88c0-0xd8ff0",
+                ".sdata": "0x908-0x910",
+                ".sbss": "0x470-0x478"
+            }
+        },
+        {
+            "source": "dol/bases/d_res_mng.cpp",
+            "memoryRanges": {
+                ".text": "0xd8ff0-0xd91d0",
+                ".data": "0x1b1c8-0x1b1e8",
+                ".sbss": "0x478-0x480"
+            }
+        },
+        {
+            "source": "dol/bases/d_scene.cpp",
+            "memoryRanges": {
+                ".text": "0xdb320-0xdb8f0",
+                ".data": "0x1cc38-0x1cc88",
+                ".sdata": "0x10c0-0x10d0",
+                ".sbss": "0x488-0x490"
+            }
+        },
+        {
+            "source": "dol/bases/d_system.cpp",
+            "memoryRanges": {
+                ".text": "0xddf60-0xded90",
+                ".ctors": "0x150-0x154",
+                ".data": "0x1ccc8-0x1cd80",
+                ".rodata": "0x52f8-0x5358",
+                ".bss": "0x20420-0x20478",
+                ".sbss": "0x4c0-0x508",
+                ".sdata2": "0x1c58-0x1c60"
+            }
+        },
+        {
+            "source": "dol/bases/d_util_frame_counter.cpp",
+            "memoryRanges": {
+                ".text": "0xe1ac0-0xe1c90",
+                ".sdata2": "0x1cd0-0x1cd8"
+            }
+        },
+        {
+            "source": "dol/bases/d_wm_actor.cpp",
+            "memoryRanges": {
+                ".text": "0xec0a0-0xec480",
+                ".ctors": "0x168-0x16c",
+                ".data": "0x1d8b0-0x1d938",
+                ".bss": "0x22630-0x22640",
+                ".sdata": "0x1278-0x1288",
+                ".sbss": "0x568-0x570",
+                ".sdata2": "0x1eb0-0x1ec8"
+            }
+        },
+        {
+            "source": "dol/bases/d_wm_csvdata.cpp",
+            "memoryRanges": {
+                ".text": "0xecdf0-0xef960",
+                ".ctors": "0x170-0x174",
+                ".data": "0x1d960-0x1daa8",
+                ".rodata": "0x5690-0x56e0",
+                ".bss": "0x22650-0x22660",
+                ".sdata": "0x1298-0x1428",
+                ".sbss": "0x578-0x590",
+                ".sdata2": "0x1ee0-0x1f18"
+            }
+        },
+        {
+            "source": "dol/bases/d_wm_demo_actor.cpp",
+            "memoryRanges": {
+                ".text": "0xef960-0xf08d0",
+                ".ctors": "0x174-0x178",
+                ".data": "0x1daa8-0x1db40",
+                ".bss": "0x22660-0x22670",
+                ".sdata": "0x1428-0x1438",
+                ".sbss": "0x590-0x598",
+                ".sdata2": "0x1f18-0x1f50"
+            }
+        },
+        {
+            "source": "dol/bases/d_wm_en_path.cpp",
+            "memoryRanges": {
+                ".text": "0xf08d0-0xf0d90",
+                ".data": "0x1db40-0x1db50"
+            }
+        },
+        {
+            "source": "dol/bases/d_wm_enemy.cpp",
+            "memoryRanges": {
+                ".text": "0xf0d90-0xf2c00",
+                ".ctors": "0x178-0x17c",
+                ".data": "0x1db50-0x1dcd8",
+                ".rodata": "0x56e0-0x5740",
+                ".bss": "0x22670-0x22680",
+                ".sdata": "0x1438-0x1520",
+                ".sbss": "0x598-0x5a0",
+                ".sdata2": "0x1f50-0x1f78"
+            }
+        },
+        {
+            "source": "dol/bases/d_wm_obj_actor.cpp",
+            "memoryRanges": {
+                ".text": "0xf7170-0xf73e0",
+                ".ctors": "0x180-0x184",
+                ".data": "0x1de30-0x1de58",
+                ".bss": "0x22690-0x226a0",
+                ".sdata": "0x1540-0x1550",
+                ".sbss": "0x5a8-0x5b0",
+                ".sdata2": "0x1fb8-0x1fc8"
+            }
+        },
+        {
+            "source": "dol/bases/d_wm_path.cpp",
+            "memoryRanges": {
+                ".text": "0xf73e0-0xf74c0",
+                ".data": "0x1de58-0x1de68"
+            }
+        },
+        {
+            "source": "dol/bases/d_s_restart_crsin_static.cpp",
+            "memoryRanges": {
+                ".text": "0xfb160-0xfb2d0",
+                ".rodata": "0x6cf0-0x6d10",
+                ".bss": "0x226e0-0x226f0"
+            }
+        },
+        {
+            "source": "dol/bases/d_SelectCursor.cpp",
+            "memoryRanges": {
+                ".data": "0x24348-0x24478",
+                ".sbss": "0x708-0x710",
+                ".sbss2": "0x18-0x20",
+                ".sdata": "0x1b88-0x1bb8",
+                ".sdata2": "0x2288-0x2290",
+                ".text": "0x1059b0-0x106360"
+            }
+        },
+        {
+            "source": "dol/bases/d_SmallScoreManager.cpp",
+            "memoryRanges": {
+                ".text": "0x106360-0x106af0",
+                ".ctors": "0x1c0-0x1c4",
+                ".bss": "0x23800-0x23838",
+                ".data": "0x24478-0x244f8",
+                ".sbss": "0x710-0x718",
+                ".sdata2": "0x2290-0x22d0"
+            }
+        },
+        {
+            "source": "dol/bases/d_WiiStrap.cpp",
+            "memoryRanges": {
+                ".text": "0x108900-0x108db0",
+                ".data": "0x24940-0x24ac8",
+                ".sdata": "0x1bc0-0x1bf0",
+                ".sbss2": "0x20-0x28"
+            }
+        },
+        {
+            "source": "dol/bases/d_a_iceball.cpp",
+            "memoryRanges": {
+                ".text": "0x11cc70-0x11e5c0",
+                ".ctors": "0x1e4-0x1e8",
+                ".rodata": "0x7020-0x7088",
+                ".data": "0x26408-0x26688",
+                ".bss": "0x24428-0x24588",
+                ".sdata2": "0x25f0-0x2660"
+            }
+        },
+        {
+            "source": "dol/bases/d_last_actor.cpp",
+            "memoryRanges": {
+                ".text": "0x11e5c0-0x11e730",
+                ".data": "0x26688-0x266d8",
+                ".sdata": "0x1cd8-0x1ce0"
+            }
+        },
+        {
+            "source": "dol/bases/d_a_player.cpp",
+            "memoryRanges": {
+                ".text": "0x11fed0-0x1440b0",
+                ".ctors": "0x1e8-0x1ec",
+                ".data": "0x267b8-0x282c0",
+                ".rodata": "0x7128-0x7b10",
+                ".bss": "0x245a0-0x25438",
+                ".sbss": "0x750-0x758",
+                ".sdata": "0x1ce0-0x1d08",
+                ".sdata2": "0x26d8-0x2968"
+            }
+        },
+        {
+            "source": "dol/bases/d_pausewindow.cpp",
+            "memoryRanges": {
+                ".text": "0x153d00-0x1552f0",
+                ".ctors": "0x1f8-0x1fc",
+                ".data": "0x29660-0x29d38",
+                ".rodata": "0x7d00-0x7d50",
+                ".bss": "0x25ae8-0x25c70",
+                ".sdata": "0x1d50-0x1d68",
+                ".sbss": "0x778-0x780",
+                ".sdata2": "0x2b58-0x2b70"
+            }
+        },
+        {
+            "source": "dol/bases/d_s_boot.cpp",
+            "memoryRanges": {
+                ".text": "0x1552f0-0x158af0",
+                ".ctors": "0x1fc-0x200",
+                ".rodata": "0x7d50-0x7d60",
+                ".data": "0x29d38-0x2a6c0",
+                ".bss": "0x25c70-0x26378",
+                ".sdata": "0x1d68-0x1d80",
+                ".sbss": "0x780-0x7a0",
+                ".sdata2": "0x2b70-0x2b78"
+            }
+        },
+        {
+            "source": "dol/sLib/s_crc.cpp",
+            "memoryRanges": {
+                ".text": "0x158af0-0x158b00"
+            }
+        },
+        {
+            "source": "dol/sLib/s_lib.cpp",
+            "memoryRanges": {
+                ".text": "0x158b00-0x158fc0",
+                ".sdata": "0x1d80-0x1d88",
+                ".sdata2": "0x2b78-0x2b80"
+            }
+        },
+        {
+            "source": "dol/sLib/s_Phase.cpp",
+            "memoryRanges": {
+                ".text": "0x158fc0-0x159090"
+            }
+        },
+        {
+            "source": "dol/sLib/s_printf.cpp",
+            "memoryRanges": {
+                ".text": "0x159090-0x159180"
+            }
+        },
+        {
+            "source": "dol/sLib/s_StateID.cpp",
+            "memoryRanges": {
+                ".text": "0x159180-0x159360",
+                ".ctors": "0x200-0x204",
+                ".data": "0x2a6c0-0x2a6e8",
+                ".bss": "0x26378-0x26390",
+                ".sbss": "0x7a0-0x7a8"
+            }
+        },
+        {
+            "source": "dol/sLib/s_StateMethod.cpp",
+            "memoryRanges": {
+                ".text": "0x159360-0x159650",
+                ".data": "0x2a6e8-0x2a728"
+            }
+        },
+        {
+            "source": "dol/sLib/s_StateMethodUsr_FI.cpp",
+            "memoryRanges": {
+                ".text": "0x159650-0x159800",
+                ".data": "0x2a728-0x2a768"
+            }
+        },
+        {
+            "source": "dol/cLib/c_counter.cpp",
+            "memoryRanges": {
+                ".text": "0x159800-0x159810",
+                ".sbss": "0x7a8-0x7b0"
+            }
+        },
+        {
+            "source": "dol/cLib/c_dylink.cpp",
+            "memoryRanges": {
+                ".text": "0x159810-0x15a490",
+                ".data": "0x2a768-0x2a7f0",
+                ".sdata": "0x1d88-0x1dc0",
+                ".sbss": "0x7b0-0x7d0"
+            }
+        },
+        {
+            "source": "dol/cLib/c_lib.cpp",
+            "memoryRanges": {
+                ".text": "0x15a490-0x15a8d0",
+                ".sdata2": "0x2b80-0x2b88"
+            }
+        },
+        {
+            "source": "dol/cLib/c_line.cpp",
+            "memoryRanges": {
+                ".text": "0x15a8d0-0x15aa20"
+            }
+        },
+        {
+            "source": "dol/cLib/c_m3d.cpp",
+            "memoryRanges": {
+                ".text": "0x15aa20-0x15aae0"
+            }
+        },
+        {
+            "source": "dol/cLib/c_math.cpp",
+            "memoryRanges": {
+                ".text": "0x15aae0-0x15ae20",
+                ".ctors": "0x204-0x208",
+                ".data": "0x2a7f0-0x2aff8",
+                ".sbss": "0x7d0-0x7d8",
+                ".sdata2": "0x2b88-0x2ba8"
+            }
+        },
+        {
+            "source": "dol/cLib/c_random.cpp",
+            "memoryRanges": {
+                ".text": "0x15ae20-0x15aef0",
+                ".sdata": "0x1dc0-0x1dc8",
+                ".sdata2": "0x2ba8-0x2bb0"
+            }
+        },
+        {
+            "source": "dol/cLib/c_tree.cpp",
+            "memoryRanges": {
+                ".text": "0x15aef0-0x15b100"
+            }
+        },
+        {
+            "source": "dol/cLib/c_owner_set.cpp",
+            "memoryRanges": {
+                ".text": "0x15b100-0x15b2e0"
+            }
+        },
+        {
+            "source": "dol/framework/f_arc_load.cpp",
+            "memoryRanges": {
+                ".text": "0x15b2e0-0x15b490"
+            }
+        },
+        {
+            "source": "dol/framework/f_base.cpp",
+            "memoryRanges": {
+                ".text": "0x15b490-0x15c500",
+                ".data": "0x2aff8-0x2b108",
+                ".sbss": "0x7d8-0x7f0",
+                ".sdata": "0x1dc8-0x1dd0"
+            }
+        },
+        {
+            "source": "dol/framework/f_line.cpp",
+            "memoryRanges": {
+                ".text": "0x15c500-0x15c6b0"
+            }
+        },
+        {
+            "source": "dol/framework/f_manager.cpp",
+            "memoryRanges": {
+                ".text": "0x15c6b0-0x15c9c0",
+                ".ctors": "0x208-0x20c",
+                ".data": "0x2b108-0x2b148",
+                ".bss": "0x26390-0x26430",
+                ".sbss": "0x7f0-0x7f8",
+                ".sdata": "0x1dd0-0x1dd8"
+            }
+        },
+        {
+            "source": "dol/framework/f_profile.cpp",
+            "memoryRanges": {
+                ".sbss": "0x7f8-0x800"
+            }
+        },
+        {
+            "source": "dol/framework/f_tree.cpp",
+            "memoryRanges": {
+                ".text": "0x15c9c0-0x15cb30"
+            }
+        },
+        {
+            "source": "dol/mLib/m_2d.cpp",
+            "memoryRanges": {
+                ".text": "0x15cb30-0x15deb0",
+                ".data": "0x2b148-0x2b1c0",
+                ".sdata2": "0x2bb0-0x2bd0",
+                ".bss": "0x26430-0x26440",
+                ".sbss": "0x800-0x808",
+                ".sbss2": "0x30-0x38"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d.cpp",
+            "memoryRanges": {
+                ".text": "0x15deb0-0x15ea90",
+                ".sbss": "0x808-0x820",
+                ".sdata2": "0x2bd0-0x2bd8"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/anm_chr.cpp",
+            "memoryRanges": {
+                ".text": "0x15ea90-0x15eee0",
+                ".sdata2": "0x2bd8-0x2be8"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/anm_chr_blend.cpp",
+            "memoryRanges": {
+                ".text": "0x15eee0-0x15f1e0"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/anm_mat_clr.cpp",
+            "memoryRanges": {
+                ".text": "0x15f1e0-0x15fde0",
+                ".data": "0x2b1c0-0x2b1f0",
+                ".sdata2": "0x2be8-0x2bf8"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/anm_tex_pat.cpp",
+            "memoryRanges": {
+                ".text": "0x15fde0-0x1609c0",
+                ".data": "0x2b1f0-0x2b220",
+                ".sdata2": "0x2bf8-0x2c08"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/anm_tex_srt.cpp",
+            "memoryRanges": {
+                ".text": "0x1609c0-0x161600",
+                ".data": "0x2b220-0x2b250",
+                ".sdata2": "0x2c08-0x2c18"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/anm_vis.cpp",
+            "memoryRanges": {
+                ".text": "0x161600-0x161880",
+                ".sdata2": "0x2c18-0x2c28"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/banm.cpp",
+            "memoryRanges": {
+                ".text": "0x161880-0x161ac0",
+                ".data": "0x2b250-0x2b298",
+                ".sbss": "0x820-0x828"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/bmdl.cpp",
+            "memoryRanges": {
+                ".text": "0x161ac0-0x162500",
+                ".data": "0x2b298-0x2b2b8"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/calc_ratio.cpp",
+            "memoryRanges": {
+                ".text": "0x162500-0x1626d0",
+                ".data": "0x2b2b8-0x2b2c8",
+                ".sdata2": "0x2c28-0x2c30"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/fanm.cpp",
+            "memoryRanges": {
+                ".text": "0x1626d0-0x162be0",
+                ".data": "0x2b2c8-0x2b2e0",
+                ".sdata2": "0x2c30-0x2c40"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/m_3d_capture.cpp",
+            "memoryRanges": {
+                ".text": "0x162be0-0x162f20",
+                ".sdata2": "0x2c40-0x2c48"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/mdl.cpp",
+            "memoryRanges": {
+                ".text": "0x162f20-0x1639d0",
+                ".data": "0x2b2e0-0x2b318",
+                ".sdata2": "0x2c48-0x2c50"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/scn_leaf.cpp",
+            "memoryRanges": {
+                ".text": "0x1639d0-0x163cb0",
+                ".data": "0x2b318-0x2b330"
+            }
+        },
+        {
+            "source": "dol/mLib/m_3d/smdl.cpp",
+            "memoryRanges": {
+                ".text": "0x163cb0-0x163e20",
+                ".data": "0x2b330-0x2b350"
+            }
+        },
+        {
+            "source": "dol/mLib/m_allocator.cpp",
+            "memoryRanges": {
+                ".text": "0x163e20-0x1643e0",
+                ".data": "0x2b350-0x2b3a8",
+                ".sbss": "0x828-0x830",
+                ".sdata2": "0x2c50-0x2c58"
+            }
+        },
+        {
+            "source": "dol/mLib/m_angle.cpp",
+            "memoryRanges": {
+                ".text": "0x1643e0-0x164430",
+                ".ctors": "0x20c-0x210",
+                ".sbss": "0x830-0x850"
+            }
+        },
+        {
+            "source": "dol/mLib/m_color.cpp",
+            "memoryRanges": {
+                ".text": "0x164430-0x164550",
+                ".sdata2": "0x2c60-0x2c70"
+            }
+        },
+        {
+            "source": "dol/mLib/m_color_fader.cpp",
+            "memoryRanges": {
+                ".text": "0x164550-0x164910",
+                ".data": "0x2b3a8-0x2b3d0",
+                ".sdata2": "0x2c70-0x2c88"
+            }
+        },
+        {
+            "source": "dol/mLib/m_fader.cpp",
+            "memoryRanges": {
+                ".text": "0x167460-0x1675c0",
+                ".sbss": "0x880-0x888"
+            }
+        },
+        {
+            "source": "dol/mLib/m_fader_base.cpp",
+            "memoryRanges": {
+                ".text": "0x1675c0-0x1677c0",
+                ".data": "0x2b780-0x2b7a8"
+            }
+        },
+        {
+            "source": "dol/mLib/m_frustum.cpp",
+            "memoryRanges": {
+                ".text": "0x1677c0-0x167e70",
+                ".sdata2": "0x2c90-0x2ca0"
+            }
+        },
+        {
+            "source": "dol/mLib/m_heap.cpp",
+            "memoryRanges": {
+                ".text": "0x167e70-0x168560",
+                ".rodata": "0x7d60-0x7d70",
+                ".data": "0x2b7a8-0x2b8c0",
+                ".bss": "0x265c8-0x265d8",
+                ".sdata": "0x1e08-0x1e10",
+                ".sbss": "0x888-0x8a0"
+            }
+        },
+        {
+            "source": "dol/mLib/m_mtx.cpp",
+            "memoryRanges": {
+                ".text": "0x168560-0x168bb0",
+                ".ctors": "0x218-0x21c",
+                ".bss": "0x265d8-0x26608",
+                ".sdata2": "0x2ca0-0x2cb0"
+            }
+        },
+        {
+            "source": "dol/mLib/m_vec.cpp",
+            "memoryRanges": {
+                ".text": "0x16a340-0x16a610",
+                ".ctors": "0x220-0x224",
+                ".bss": "0x26748-0x26778",
+                ".sdata2": "0x2cd0-0x2ce0"
+            }
+        },
+        {
+            "source": "dol/mLib/m_wipe_fader.cpp",
+            "memoryRanges": {
+                ".text": "0x16a610-0x16ad80",
+                ".data": "0x2b8d0-0x2b900",
+                ".sdata2": "0x2ce0-0x2d18"
+            }
+        },
+        {
+            "source": "lib/nw4hbm/ut/list.cpp",
+            "compilerFlags": "-proc gekko -fp hard -O4 -Cpp_exceptions off -enum int -RTTI off",
+            "memoryRanges": {
+                ".text": "0x183f80-0x1840f0"
+            }
+        },
+        {
+            "source": "lib/nw4r/ut/ut_list.cpp",
+            "compilerFlags": "-proc gekko -fp hard -O4 -Cpp_exceptions off -enum int -RTTI off",
+            "memoryRanges": {
+                ".text": "0x222790-0x2229f0"
+            }
+        },
+        {
+            "source": "lib/egg/core/eggDisposer.cpp",
+            "memoryRanges": {
+                ".text": "0x2b3c90-0x2b3d70",
+                ".data": "0x51ac0-0x51ad0"
+            }
+        },
+        {
+            "source": "lib/egg/core/eggColorFader.cpp",
+            "memoryRanges": {
+                ".text": "0x2b49f0-0x2b4f40",
+                ".data": "0x51b78-0x51ba0",
+                ".sdata2": "0x40b0-0x40b8"
+            }
+        },
+        {
+            "source": "runtime/global_destructor_chain.c",
+            "compilerFlags": "-proc gekko -fp hard -O4,p -char signed -rtti off -enum int -func_align 4 -Cpp_exceptions off",
+            "memoryRanges": {
+                ".text": "0x2d62f0-0x2d6350",
+                ".sbss": "0x1418-0x1420"
+            }
+        },
+        {
+            "source": "runtime/class_arrays.cpp",
+            "compilerFlags": "-proc gekko -fp hard -O4 -char signed -rtti off -enum int -func_align 4 -use_lmw_stmw on -Cpp_exceptions on",
+            "memoryRanges": {
+                ".text": "0x2d6350-0x2d6700",
+                "extab": "0x0-0x48",
+                "extabindex": "0x0-0x5c"
+            }
+        },
+        {
+            "source": "runtime/__init_cpp_exceptions.cpp",
+            "compilerFlags": "-proc gekko -fp hard -O4,p -char signed -rtti off -enum int -func_align 4 -Cpp_exceptions off",
+            "memoryRanges": {
+                ".text": "0x2d6e50-0x2d6ec0",
+                ".ctors$10": "0x0-0x4",
+                ".dtors$10": "0x0-0x4",
+                ".dtors$15": "0x4-0x8",
+                ".sdata": "0x2508-0x2510"
+            }
+        }
+    ]
+}

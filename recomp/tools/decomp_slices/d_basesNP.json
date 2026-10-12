@@ -1,0 +1,194 @@
+{
+    "meta": {
+        "fileName": "d_basesNP.rel",
+        "type": "REL",
+        "defaultCompilerFlags": "-sdata 0 -sdata2 0 -proc gekko -fp hard -O4,p -inline noauto -char signed -rtti off -enum int -Cpp_exceptions off -ipa file -enc SJIS",
+        "moduleNum": 2,
+        "baseAddr": "8076D770",
+        "sections": {
+            "":                     { "index": 0,  "align": 0, "size": "0x0" },
+            ".text":                { "index": 1,  "align": 16, "size": "0x1c6004" },
+            ".ctors":               { "index": 2,  "align": 4, "size": "0x4f8" },
+            ".dtors":               { "index": 3,  "align": 4, "size": "0x4" },
+            ".rodata":              { "index": 4,  "align": 8, "size": "0xa5fc" },
+            ".data":                { "index": 5,  "align": 8, "size": "0x51c98" },
+            ".bss":                 { "index": 6,  "align": 8, "size": "0x12484" },
+            ".rela.text":           { "index": 7,  "align": 4, "size": "0x0" },
+            ".rela.ctors":          { "index": 8,  "align": 4, "size": "0x0" },
+            ".rela.dtors":          { "index": 9,  "align": 4, "size": "0x0" },
+            ".rela.data":           { "index": 10, "align": 4, "size": "0x0" },
+            ".rela.rodata":         { "index": 11, "align": 4, "size": "0x0" },
+            ".mwcats.text":         { "index": 12, "align": 4, "size": "0x0" },
+            ".rela.mwcats.text":    { "index": 13, "align": 4, "size": "0x0" },
+            ".symtab":              { "index": 14, "align": 4, "size": "0x0" },
+            ".shstrtab":            { "index": 15, "align": 1, "size": "0x0" },
+            ".strtab":              { "index": 16, "align": 1, "size": "0x0" },
+            ".comment":             { "index": 17, "align": 4, "size": "0x0" },
+            ".PPC.EMB.apuinfo":     { "index": 18, "align": 16, "size": "0x0" }
+        }
+    },
+    "keepWeak": [
+        "setAnim__11daWmPeach_cFifff",
+        "coinSE__14daObjCenter2_cFv",
+        "getAngle__14daObjCenter2_cFv",
+        "tryPlayCoinSE__14daObjCenter2_cFv"
+    ],
+    "slices": [
+        {
+            "source": "runtime/rel_init.cpp",
+            "memoryRanges": {
+                ".text": "0x0-0x70"
+            }
+        },
+        {
+            "source": "runtime/global_destructor_chain.c",
+            "compilerFlags": "-c -Cpp_exceptions off -O4 -fp hard -sdata 0 -sdata2 0",
+            "memoryRanges": {
+                ".text": "0x70-0xf0",
+                ".dtors": "0x0-0x4",
+                ".bss": "0x0-0x8"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_collection_coin_base.cpp",
+            "memoryRanges": {
+                ".text": "0x89e0-0x8e00",
+                ".data": "0x1ba8-0x1d30",
+                ".rodata": "0x130-0x138"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_model_play_guide.cpp",
+            "memoryRanges": {
+                ".text": "0x27820-0x27b20",
+                ".data": "0xa890-0xa940"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_awa.cpp",
+            "memoryRanges": {
+                ".text": "0x4b0d0-0x4b730",
+                ".rodata": "0x1f98-0x1fe8",
+                ".data": "0x13190-0x132b0"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_nice_coin.cpp",
+            "memoryRanges": {
+                ".text": "0x104d70-0x105450",
+                ".ctors": "0x2b0-0x2b4",
+                ".data": "0x33778-0x33930",
+                ".bss": "0xc9d0-0xca50"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_obj_center2.cpp",
+            "memoryRanges": {
+                ".text": "0x106f00-0x107c50",
+                ".ctors": "0x2b8-0x2bc",
+                ".rodata": "0x6120-0x6140",
+                ".data": "0x33cf0-0x33ee8",
+                ".bss": "0xcad0-0xcb90"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_obj_fruit_tree.cpp",
+            "memoryRanges": {
+                ".text": "0x108360-0x108970",
+                ".rodata": "0x6180-0x6198",
+                ".data": "0x34058-0x343e0"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_remo_door.cpp",
+            "memoryRanges": {
+                ".text": "0x128170-0x128b00",
+                ".ctors": "0x2f8-0x2fc",
+                ".rodata": "0x6cd0-0x6d00",
+                ".data": "0x3a748-0x3a960",
+                ".bss": "0xdd88-0xde48"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_wm_cannon.cpp",
+            "memoryRanges": {
+                ".text": "0x15e7e0-0x15ecc0",
+                ".ctors": "0x3c4-0x3c8",
+                ".rodata": "0x86d0-0x86e8",
+                ".data": "0x43ef8-0x43fd0",
+                ".bss": "0xfd38-0xfd48"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_wm_cloud.cpp",
+            "memoryRanges": {
+                ".text": "0x15fbe0-0x1604a0",
+                ".ctors": "0x3cc-0x3d0",
+                ".rodata": "0x8728-0x87b0",
+                ".data": "0x441b0-0x44400",
+                ".bss": "0xfd60-0xfd70"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_wm_dokan.cpp",
+            "memoryRanges": {
+                ".text": "0x1622b0-0x162580",
+                ".ctors": "0x3d8-0x3dc",
+                ".rodata": "0x8830-0x8840",
+                ".data": "0x44768-0x44820",
+                ".bss": "0xfd98-0xfda8"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_wm_dokan_route.cpp",
+            "memoryRanges": {
+                ".text": "0x162580-0x163620",
+                ".ctors": "0x3dc-0x3e0",
+                ".rodata": "0x8840-0x8880",
+                ".data": "0x44820-0x44a68",
+                ".bss": "0xfda8-0xfdc0"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_wm_peach.cpp",
+            "memoryRanges": {
+                ".text": "0x176630-0x176cd0",
+                ".ctors": "0x420-0x424",
+                ".rodata": "0x8ea0-0x8ed0",
+                ".data": "0x46838-0x46940",
+                ".bss": "0x10020-0x10030"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_a_wm_peach_castle.cpp",
+            "memoryRanges": {
+                ".text": "0x176cd0-0x177690",
+                ".ctors": "0x424-0x428",
+                ".rodata": "0x8ed0-0x8ef8",
+                ".data": "0x46940-0x46be0",
+                ".bss": "0x10030-0x10040"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_s_autoselect.cpp",
+            "memoryRanges": {
+                ".text": "0x1b13f0-0x1b14a0",
+                ".data": "0x4dfa0-0x4dff8"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_s_restart_crsin.cpp",
+            "memoryRanges": {
+                ".text": "0x1b6200-0x1b63f0",
+                ".data": "0x4f150-0x4f1a8"
+            }
+        },
+        {
+            "source": "d_basesNP/bases/d_s_select.cpp",
+            "memoryRanges": {
+                ".text": "0x1b63f0-0x1b64a0",
+                ".data": "0x4f1a8-0x4f200"
+            }
+        }
+    ]
+}
