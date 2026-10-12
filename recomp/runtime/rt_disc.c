@@ -44,6 +44,7 @@ static void *preload_thread(void *a)
     uint64_t t0 = rt_now_ns(), total = 0;
     for (int i = 0; i < nfiles; i++) {
         disc_file *f = &files[i];
+        if (f->mem) continue;
         FILE *fp = fopen(f->path, "rb"); if (!fp) continue;
         uint8_t *m = malloc(f->size ? f->size : 1);
         size_t got = m ? fread(m, 1, f->size, fp) : 0;
@@ -65,6 +66,30 @@ static void disc_preload_start(void) {
 #endif
 }
 
+/* The FST as the game sees it: the disc's, plus extra root-level files (mkwcat.arc) appended at
+   the end of the entry table and placed after the last file on the "disc". */
+static uint8_t *g_fst; static uint32_t g_fst_len;
+const uint8_t *disc_fst(uint32_t *len) { *len = g_fst_len; return g_fst; }
+static void wbe32(uint8_t *p, uint32_t v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
+static uint8_t *fst_add_file(uint8_t *fst, uint32_t *len, const char *name, uint32_t size, uint64_t *disc_off) {
+    uint32_t count = be32(fst + 8), names = count * 12, nlen = *len - names;
+    uint64_t end = 0;
+    for (uint32_t i = 1; i < count; i++) {
+        const uint8_t *e = fst + i * 12;
+        if (!e[0]) { uint64_t x = ((uint64_t)be32(e + 4) << 2) + be32(e + 8); if (x > end) end = x; }
+    }
+    uint64_t off = (end + 0x7FFF) & ~0x7FFFull;
+    uint32_t nl = (uint32_t)strlen(name) + 1, newlen = names + 12 + nlen + nl;
+    uint8_t *n = calloc(1, newlen);
+    memcpy(n, fst, names);
+    wbe32(n + names, nlen);                       /* file, name offset */
+    wbe32(n + names + 4, (uint32_t)(off >> 2)); wbe32(n + names + 8, size);
+    memcpy(n + names + 12, fst + names, nlen); memcpy(n + names + 12 + nlen, name, nl);
+    wbe32(n + 8, count + 1);                      /* root: one more entry */
+    free(fst); *len = newlen; *disc_off = off;
+    return n;
+}
+
 int disc_init(void) {
     char p[1200];
     snprintf(p, sizeof p, "%s/sys/boot.bin", g_disc);
@@ -74,16 +99,25 @@ int disc_init(void) {
     f = fopen(p, "rb"); if (!f) return 1;
     fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
     uint8_t *fst = malloc(n); if (fread(fst, 1, n, f) != (size_t)n) { fclose(f); return 1; } fclose(f);
+    uint32_t flen = (uint32_t)n;
+    const char *mod_arc_path(void);
+    const char *arc = mod_arc_path();
+    uint64_t arc_off = 0; long arc_size = -1;
+    if (arc) { FILE *af = fopen(arc, "rb"); if (af) { fseek(af, 0, SEEK_END); arc_size = ftell(af); fclose(af); } }
+    if (arc_size > 0) fst = fst_add_file(fst, &flen, "mkwcat.arc", (uint32_t)arc_size, &arc_off);
+    n = flen;
     char sys[1100];
     snprintf(sys, sizeof sys, "%s/sys/boot.bin", g_disc); add(0, 0x440, sys);
     snprintf(sys, sizeof sys, "%s/sys/bi2.bin", g_disc); add(0x440, 0x2000, sys);
     snprintf(sys, sizeof sys, "%s/sys/apploader.img", g_disc); add(0x2440, 0x40000, sys);
     snprintf(sys, sizeof sys, "%s/sys/main.dol", g_disc); add((uint64_t)be32(boot + 0x420) << 2, 0x400000, sys);
     snprintf(sys, sizeof sys, "%s/sys/fst.bin", g_disc); add((uint64_t)be32(boot + 0x424) << 2, (uint32_t)n, sys);
+    files[nfiles - 1].mem = fst;                  /* served from memory (it may have extra files) */
     uint32_t count = be32(fst + 8);
     char root[1100]; snprintf(root, sizeof root, "%s/files", g_disc);
-    walk(fst, (const char *)fst + count * 12, 1, count, root);
-    free(fst);
+    walk(fst, (const char *)fst + count * 12, 1, count - (arc_size > 0), root);
+    if (arc_size > 0) { add(arc_off, (uint32_t)arc_size, arc); rt_log("disc", "mkwcat.arc added at %llX (%ld bytes)", (unsigned long long)arc_off, arc_size); }
+    g_fst = fst; g_fst_len = flen;
     qsort(files, nfiles, sizeof *files, cmp_off);
     rt_log("disc", "%d files indexed", nfiles);
     disc_preload_start();

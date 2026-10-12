@@ -167,8 +167,21 @@ static const struct { const char *key; int def; const char *help; } setting_defs
     {"fullscreen", 0, "1 = fullscreen (borderless, the size of the monitor; F11 or Alt+Enter toggles, Esc leaves it)"},
     {"texture_filter", 1, "0 = nearest (pixel perfect), 1 = bilinear, 2/3/4/5 = anisotropic 2x/4x/8x/16x"},
     {"aspect_4_3", 1, "1 = full-screen 4:3 gameplay (no letterbox), 0 = widescreen 16:9"},
+    /* mkwcat's nsmbw-project (8 players) options, read when the game starts */
+    {"mod_shake_with_button", 0, "8-player mod: 1 = a button does the shake/spin (no motion needed)"},
+    {"mod_death_messages", 0, "8-player mod: show messages when players die: 0 = off, 1 = on all damage, 2 = only on death"},
+    {"mod_infinite_lives", 0, "8-player mod: 1 = count deaths instead of lives (no game over)"},
+    {"mod_no_powerup_pause", 0, "8-player mod: 1 = don't pause the game when someone powers up"},
+    {"mod_always_exit_course", 0, "8-player mod: 1 = Exit Course is always available in the pause menu"},
+    {"mod_hide_motion_guides", 1, "8-player mod: hide motion control speech bubbles: 0 = never, 1 = with 5+ players, 2 = always"},
+    {"mod_yoshi_colors", 0, "8-player mod: Yoshi colors: 0 = normal, 1 = random, 2 = always green"},
+    {"mod_unlocked_all_worlds", 0, "8-player mod: 1 = all worlds available"},
+    {"mod_all_paths_open", 0, "8-player mod: 1 = all world map paths available"},
+    {"mod_liftable_tiles", 0, "8-player mod: 1 = liftable tiles"},
+    {"mod_bubble_swarm", 0, "8-player mod: 1 = 1-Up bubble swarm mode"},
+    {"mod_deadly_1up", 0, "8-player mod: 1 = deadly 1-ups"},
 };
-static char setting_keys[32][64]; static int setting_vals[32], nsettings, settings_loaded;
+static char setting_keys[64][64]; static int setting_vals[64], nsettings, settings_loaded;
 int rt_setting(const char *key, int def) {
     if (!settings_loaded) {
         settings_loaded = 1;
@@ -183,7 +196,7 @@ int rt_setting(const char *key, int def) {
             f = fopen(p, "r");
         }
         char line[256];
-        while (f && fgets(line, sizeof line, f) && nsettings < 32) {
+        while (f && fgets(line, sizeof line, f) && nsettings < 64) {
             char k[64]; int v;
             if (line[0] == ';' || line[0] == '#') continue;
             if (sscanf(line, " %63[A-Za-z0-9_] = %d", k, &v) == 2) { snprintf(setting_keys[nsettings], 64, "%s", k); setting_vals[nsettings++] = v; }
@@ -207,7 +220,7 @@ void rt_setting_set(const char *key, int val) {
     rt_setting(key, 0);
     int found = 0;
     for (int i = 0; i < nsettings; i++) if (!strcmp(setting_keys[i], key)) { setting_vals[i] = val; found = 1; }
-    if (!found && nsettings < 32) { snprintf(setting_keys[nsettings], 64, "%s", key); setting_vals[nsettings++] = val; }
+    if (!found && nsettings < 64) { snprintf(setting_keys[nsettings], 64, "%s", key); setting_vals[nsettings++] = val; }
     char p[1200]; snprintf(p, sizeof p, "%s/settings.ini", g_root);
     FILE *f = fopen(p, "r"); char *out = NULL; size_t n = 0, cap = 0; int written = 0;
     char line[256];
@@ -586,7 +599,9 @@ static void setup_low_memory(void) {
     size_t n; uint8_t *boot, *bi2, *fst;
     snprintf(p, sizeof p, "%s/sys/boot.bin", g_disc); boot = read_file(p, &n); if (!boot) rt_fatal("cannot read %s", p);
     snprintf(p, sizeof p, "%s/sys/bi2.bin", g_disc); bi2 = read_file(p, &n); if (!bi2) rt_fatal("cannot read %s", p);
-    size_t fst_len; snprintf(p, sizeof p, "%s/sys/fst.bin", g_disc); fst = read_file(p, &fst_len); if (!fst) rt_fatal("cannot read %s", p);
+    const uint8_t *disc_fst(uint32_t *len);
+    uint32_t fl; const uint8_t *df = disc_fst(&fl);
+    size_t fst_len = fl; fst = malloc(fl); memcpy(fst, df, fl);
     memcpy(G(0x80000000), boot, 0x20);                     /* disc ID */
     memcpy(G(0x80003180), boot, 4);                        /* game ID check copy */
     /* values from Dolphin's Wii BS2 emulation + IOS53 memory setup */
@@ -660,8 +675,9 @@ int main(int argc, char **argv) {
     t0_ns = rt_now_ns();
     plat_init();
     load_dol();
-    setup_low_memory();
+    void mod_load(void); mod_load();
     if (disc_init()) rt_fatal("cannot open disc files in %s", g_disc);
+    setup_low_memory();
     hw_init(); ios_init(); gx_init();
     main_thread.fiber = plat_fiber_main();
     cur = &main_thread;

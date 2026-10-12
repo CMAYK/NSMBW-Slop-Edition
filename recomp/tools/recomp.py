@@ -47,6 +47,43 @@ class Image:
                 self.kinds.append(s['kind'])
         return man
 
+    def load_mod(self, linked_dir):
+        """Load the statically linked d_project module (link_mod.py) and apply what its _prolog
+        patches at runtime (mod_patches.py): reference immediates, 4->8 player-count immediates,
+        extern thunks and the replace branches. Returns the module info."""
+        import json
+        info = json.load(open(os.path.join(linked_dir, 'mod.json')))
+        img = open(os.path.join(linked_dir, info['image']), 'rb').read()
+        for s in info['sections']:
+            if s['kind'] == 'bss': continue
+            self.segs.append((s['addr'], img[s['file_off']:s['file_off'] + s['size']]))
+            self.kinds.append(s['kind'])
+        p = json.load(open(os.path.join(linked_dir, 'mod_patches.json')))
+        # On a Wii these take effect when the module starts (its _prolog patches the code); before
+        # that the game runs unpatched. So each patched word keeps its original, and the
+        # translation of such a word picks one at runtime from g_mod_on (see FuncEmitter).
+        self.dual = {}
+        for thunk, g in p['extern']: self.patch(thunk, struct.pack('>I', self.word(g)))
+        for addr, half, typ, dest in p['refs']: self.patch(addr, struct.pack('>H', half), dual=True)
+        for addr, size, val in p['four']: self.patch(addr, val.to_bytes(size, 'big'), dual=True)
+        for g, d in p['replace']: self.patch(g, struct.pack('>I', 0x48000000 | ((d - g) & 0x3FFFFFC)), dual=True)
+        # Riivolution's memory patches are there from boot
+        for a, new, old in p.get('memory', ()): self.patch(a, struct.pack('>I', new))
+        info['patches'] = p
+        return info
+
+    def patch(self, a, data, dual=False):
+        if dual:
+            for w in range(a & ~3, a + len(data), 4):
+                if w not in self.dual: self.dual[w] = self.word(w)
+        self.word(a)  # sorts segments
+        import bisect
+        i = bisect.bisect_right(self._starts, a) - 1
+        s, b = self.segs[i]
+        assert a + len(data) <= s + len(b), hex(a)
+        if not isinstance(b, bytearray): b = bytearray(b); self.segs[i] = (s, b)
+        b[a - s:a - s + len(data)] = data
+
     def word(self, a):
         import bisect
         if getattr(self, '_starts', None) is None or len(self._starts) != len(self.segs):
@@ -115,8 +152,9 @@ class FuncEmitter:
     def translate(self):
         rc = self.rc
         words = [(a, rc.img.word(a)) for a in range(self.start, self.end, 4)]
-        # pass 1: labels
-        for a, w in words:
+        dual = getattr(rc.img, 'dual', {})
+        # pass 1: labels (branch targets of both versions of runtime-patched words)
+        for a, w in words + [(a, dual[a]) for a, _ in words if a in dual]:
             if w is None: continue
             op = w >> 26
             if op == 18 and not (w & 1):
@@ -135,7 +173,14 @@ class FuncEmitter:
             if w is None:
                 out.append(f'    /* {a:08X}: outside image */'); continue
             n0 = len(out)
-            ok = self.insn(a, w)
+            if a in dual and dual[a] != w:
+                out.append('    if (g_mod_on) {')
+                ok = self.insn(a, w)
+                out.append('    } else {')
+                ok = ok and self.insn(a, dual[a])
+                out.append('    }')
+            else:
+                ok = self.insn(a, w)
             rc.stats['insn_total'] += 1
             if ok:
                 rc.stats['insn_ok'] += 1
@@ -485,7 +530,7 @@ def ok_name(w):
 
 # --------------------------------------------------------------------------- driver
 class Recompiler:
-    def __init__(self, img, funcs, objs):
+    def __init__(self, img, funcs, objs, replaced=(), extra_jt_segs=()):
         funcs = self.add_secondary_entries(img, funcs)
         self.img, self.funcs = img, funcs
         self.by_addr = {a: (a, s, n) for a, s, n, _ in funcs}
@@ -500,13 +545,21 @@ class Recompiler:
             if any(img.word(x) == 0x4E800420 for x in range(a, a + s, 4)): bctr_funcs.append((a, a + s))
         bstarts = [b[0] for b in bctr_funcs]
         jt = set()
-        for seg_addr, seg in img.data_segs():
+        for seg_addr, seg in list(img.data_segs()) + list(extra_jt_segs):
             for j in range(0, len(seg) - 3, 4):
                 v = struct.unpack_from('>I', seg, j)[0]
                 i = bisect.bisect_right(bstarts, v) - 1
                 if i >= 0 and bctr_funcs[i][0] < v < bctr_funcs[i][1] and not v & 3: jt.add(v)
         self.jt = sorted(jt)
         self.ident = {a: c_ident(n, a) for a, s, n, _ in funcs}
+        # Replaced game functions (their first word is now a branch to module code) can still be
+        # entered in the middle: the module's copies of them keep using the game's jump tables,
+        # whose cases land in the original body. Those cases become extra entry points.
+        self.ext_entries = {}
+        for a, sz, n, _ in funcs:
+            if a in replaced:
+                t = self.jt_targets_in(a, a + sz)
+                if t: self.ext_entries[a] = sorted(t)
 
     @staticmethod
     def add_secondary_entries(img, funcs):
@@ -573,19 +626,25 @@ class Recompiler:
                 return False
         with Out(os.path.join(outdir, 'recomp_funcs.h')) as h:
             h.write('#pragma once\n#include "ppc_context.h"\n')
+            h.write('extern int g_mod_on;   /* the 8-player module has started (rt_mod.c) */\n')
+            table = [(a, self.ident[a], n, s) for a, s, n, _ in self.funcs]
             for a, s, n, _ in self.funcs:
                 h.write(f'void {self.body_ident[a]}(ppc_context *ctx, uint8_t *base);\n')
                 if self.body_ident[a] != self.ident[a]: h.write(f'void {self.ident[a]}(ppc_context *ctx, uint8_t *base);\n')
+                for t in self.ext_entries.get(a, ()):
+                    h.write(f'void {self.body_ident[a]}_at_{t:08X}(ppc_context *ctx, uint8_t *base);\n')
+                    table.append((t, f'{self.body_ident[a]}_at_{t:08X}', f'{n}@{t:08X}', s - (t - a)))
+            table.sort()
             h.write('typedef struct { uint32_t addr; ppc_func fn; } ppc_func_entry;\n')
             h.write('extern const ppc_func_entry ppc_func_table[];\nextern const uint32_t ppc_func_count;\n')
             h.write('typedef struct { uint32_t addr, size; const char *name; } ppc_func_name;\n')
             h.write('extern const ppc_func_name ppc_func_names[];\n')
         with Out(os.path.join(outdir, 'recomp_table.c')) as t:
             t.write('#include "recomp_funcs.h"\nconst ppc_func_entry ppc_func_table[] = {\n')
-            for a, s, n, _ in self.funcs: t.write(f'    {{ 0x{a:08X}u, {self.ident[a]} }},\n')
-            t.write(f'}};\nconst uint32_t ppc_func_count = {len(self.funcs)};\n')
+            for a, i, n, s in table: t.write(f'    {{ 0x{a:08X}u, {i} }},\n')
+            t.write(f'}};\nconst uint32_t ppc_func_count = {len(table)};\n')
             t.write('const ppc_func_name ppc_func_names[] = {\n')
-            for a, s, n, _ in self.funcs: t.write(f'    {{ 0x{a:08X}u, 0x{s:X}u, "{n}" }},\n')
+            for a, i, n, s in table: t.write(f'    {{ 0x{a:08X}u, 0x{s:X}u, "{n}" }},\n')
             t.write('};\n')
         for ci in range(0, len(self.funcs), chunk):
             with Out(os.path.join(outdir, f'recomp_{ci // chunk:03d}.c')) as fo:
@@ -594,9 +653,19 @@ class Recompiler:
                     fe = FuncEmitter(self, a, s, n)
                     body = fe.translate()
                     fo.write(f'/* {n} @ {a:08X} size {s:#x} */\n')
-                    fo.write(f'void {self.body_ident[a]}(ppc_context *ctx, uint8_t *base) {{\n    PPC_ENTER(0x{a:08X}u);\n')
-                    fo.write('\n'.join(body))
-                    fo.write('\n}\n\n')
+                    ents = self.ext_entries.get(a)
+                    if ents:
+                        bi = self.body_ident[a]
+                        fo.write(f'static void {bi}_impl(ppc_context *ctx, uint8_t *base, uint32_t entry_) {{\n    PPC_ENTER(0x{a:08X}u);\n')
+                        fo.write('    switch (entry_) { ' + ' '.join(f'case {hx(t)}: goto L_{t:08X};' for t in ents) + ' default: break; }\n')
+                        fo.write('\n'.join(body)); fo.write('\n}\n')
+                        fo.write(f'void {bi}(ppc_context *ctx, uint8_t *base) {{ {bi}_impl(ctx, base, 0); }}\n')
+                        for t in ents: fo.write(f'void {bi}_at_{t:08X}(ppc_context *ctx, uint8_t *base) {{ {bi}_impl(ctx, base, {hx(t)}); }}\n')
+                        fo.write('\n')
+                    else:
+                        fo.write(f'void {self.body_ident[a]}(ppc_context *ctx, uint8_t *base) {{\n    PPC_ENTER(0x{a:08X}u);\n')
+                        fo.write('\n'.join(body))
+                        fo.write('\n}\n\n')
                     self.stats['funcs'] += 1
 
 
@@ -605,21 +674,52 @@ def main():
     ap.add_argument('--out', default=os.path.join(ROOT, 'out'))
     ap.add_argument('--chunk', type=int, default=400)
     ap.add_argument('--no-rels', action='store_true', help='main.dol only')
+    ap.add_argument('--no-mod', action='store_true', help='leave out the d_project (8 player) module')
     a = ap.parse_args()
     img = Image(); img.load_dol(os.path.join(ROOT, 'orig', 'main.dol'))
     funcs, objs = load_symbols(os.path.join(ROOT, 'config', 'symbols.txt'))
     funcs = [f for f in funcs if f[3] in ('.init', '.text')]
+    info = None
     if not a.no_rels:
         man = img.load_linked(os.path.join(ROOT, 'linked'))
         for m in man:
             base = {s['name']: s['addr'] for s in m['sections']}
             f2, o2 = load_symbols(os.path.join(ROOT, 'config', m['name'], 'symbols.txt'), base)
             funcs += [f for f in f2 if f[3] == '.text']; objs += o2
+        if not a.no_mod and os.path.exists(os.path.join(ROOT, 'linked', 'mod.json')):
+            info = img.load_mod(os.path.join(ROOT, 'linked'))
+            base = {s['name']: s['addr'] for s in info['sections']}
+            f2, o2 = load_symbols(os.path.join(ROOT, 'config', 'd_project', 'symbols.txt'), base)
+            funcs += f2
+            print(f"d_project module: {len(f2)} functions, {len(info['patches']['replace'])} game functions replaced")
         funcs.sort()
-    rc = Recompiler(img, funcs, objs)
+    replaced, extra = set(), []
+    if 'info' in dir() and info:
+        replaced = {g for g, d in info['patches']['replace']}
+        extra = [(x['addr'], img.segs[[q[0] for q in img.segs].index(x['addr'])][1]) for x in info['sections'] if x['kind'] == 'text']
+    rc = Recompiler(img, funcs, objs, replaced, extra)
     missing = rc.load_hle(os.path.join(ROOT, 'runtime', 'hle_funcs.txt'))
     if missing: print('WARNING: HLE names not found:', sorted(missing))
     rc.run(a.out, a.chunk)
+    # constants the runtime needs to load and start the module (rt_mod.c)
+    lines = ['#pragma once']
+    if info:
+        P = info['patches']; pre = P['pre']
+        bss = [x for x in info['sections'] if x['kind'] == 'bss'][0]
+        lines += ['#define MOD_PRESENT 1', f"#define MOD_LOAD 0x{info['load_addr']:08X}u", f"#define MOD_IMAGE_SIZE 0x{info['image_size']:X}u",
+                  f"#define MOD_BSS 0x{bss['addr']:08X}u", f"#define MOD_BSS_SIZE 0x{bss['size']:X}u",
+                  f"#define MOD_PREINIT 0x{pre['preinit']:08X}u", f"#define MOD_MAIN 0x{pre['main']:08X}u",
+                  f"#define MOD_FIND_CODE_REGION 0x{pre['find_code_region']:08X}u", f"#define MOD_CODE_REGION_VAR 0x{pre['code_region_var']:08X}u",
+                  f"#define MOD_STACK_CHK_INIT 0x{pre['stack_chk_init']:08X}u",
+                  'static const uint32_t mod_ctors[] = {' + ', '.join(f'0x{c:08X}u' for c in P['ctors']) + '};']
+        # module function -> the game function it replaces (for code that checks callers)
+        sizes = {f[0]: f[1] for f in rc.funcs}
+        rmap = sorted((d, d + sizes.get(d, 4), g) for g, d in P['replace'])
+        lines.append('static const uint32_t mod_replace_map[][3] = {' + ', '.join(f'{{0x{a:08X}u, 0x{b:08X}u, 0x{g:08X}u}}' for a, b, g in rmap) + '};')
+    else: lines += ['#define MOD_PRESENT 0']
+    data = '\n'.join(lines) + '\n'
+    hp = os.path.join(a.out, 'recomp_mod.h')
+    if not os.path.exists(hp) or open(hp).read() != data: open(hp, 'w').write(data)
     s = rc.stats
     print(f"functions: {s['funcs']}  instructions: {s['insn_total']}  translated: {s['insn_ok']} "
           f"({100.0 * s['insn_ok'] / max(1, s['insn_total']):.3f}%)")

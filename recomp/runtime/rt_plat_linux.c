@@ -89,7 +89,18 @@ static void prof_start(void) {
     struct itimerval it = {{0, 1000}, {0, 1000}}; setitimer(ITIMER_PROF, &it, NULL);
 }
 
+/* RT_HANGDUMP=sec: dump guest state when no frame was presented for that long */
+extern uint64_t g_frames_presented;
+#include <pthread.h>
+#include <unistd.h>
+static void *hang_thread(void *a) {
+    int sec = (int)(intptr_t)a; uint64_t last = 0; int still = 0;
+    for (;;) { sleep(1); uint64_t f = g_frames_presented; if (f == last && f > 0) { if (++still >= sec) on_alarm(0); } else still = 0; last = f; }
+    return 0;
+}
 void plat_init(void) {
+    const char *hd = getenv("RT_HANGDUMP");
+    if (hd) { pthread_t t; pthread_create(&t, NULL, hang_thread, (void *)(intptr_t)atoi(hd)); }
     const char *w = getenv("RT_WATCHDOG");
     if (w) { signal(SIGALRM, on_alarm); alarm(atoi(w)); }
     if (getenv("RT_PROFILE")) {

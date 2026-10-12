@@ -52,3 +52,4 @@ setBgmMode__6dAudioFi
 fn_8019BA20
 fn_8019CC70
 read__10dGameKey_cFv
+fn_8015BB20

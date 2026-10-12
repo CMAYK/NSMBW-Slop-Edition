@@ -12,6 +12,7 @@ set -e
 cd "$(dirname "$0")"
 ZCC="python3 -m ziglang cc -target x86_64-windows-gnu"
 FLAGS="-std=gnu11 -O2 -march=x86_64_v3 -ffp-contract=off -w -Iruntime -Iout"
+sh tools/gen.sh
 mkdir -p out/objwin
 # objects are written in place (no temp+rename: renames over a shared folder leave .fuse_hidden files)
 for f in out/recomp_*.c; do
@@ -19,7 +20,7 @@ for f in out/recomp_*.c; do
   [ -f "$o" ] && [ "$o" -nt "$f" ] && continue
   echo "$f"
 done | xargs -r -P "$(nproc)" -I{} sh -c "$ZCC $FLAGS -c {} -o out/objwin/\$(basename {}).o || { rm -f out/objwin/\$(basename {}).o; exit 1; }"
-for f in rt_core rt_hw rt_ios rt_disc rt_gx rt_gxrender rt_bt rt_wiimote rt_threads rt_ax rt_hdtex rt_aspect rt_menu rt_lyt rt_plat_win; do
+for f in rt_core rt_hw rt_ios rt_disc rt_gx rt_gxrender rt_bt rt_wiimote rt_threads rt_ax rt_hdtex rt_aspect rt_menu rt_lyt rt_mod rt_plat_win; do
   $ZCC $FLAGS -c runtime/$f.c -o out/objwin/$f.o
 done
 BUILD_TMP=${BUILD_TMP:-/tmp/nsmbw_build}; mkdir -p "$BUILD_TMP"
@@ -32,6 +33,8 @@ mkdir -p $GAME/orig $GAME/nand
 if cat "$BUILD_TMP/nsmbw.exe" > $GAME/nsmbw.exe 2>/dev/null; then echo "deployed $GAME/nsmbw.exe"
 else echo "NOTE: $GAME/nsmbw.exe is in use (game running?) - close it and run this script again"; fi
 cmp -s orig/main.dol $GAME/orig/main.dol || cat orig/main.dol > $GAME/orig/main.dol
+cmp -s linked/d_project.bin $GAME/orig/d_project.bin || cat linked/d_project.bin > $GAME/orig/d_project.bin
+mkdir -p $GAME/mod; cmp -s mod/mkwcat-nsmbw.arc $GAME/mod/mkwcat-nsmbw.arc || cat mod/mkwcat-nsmbw.arc > $GAME/mod/mkwcat-nsmbw.arc
 mkdir -p $GAME/ui
 for f in ui/*.png; do [ -f "$f" ] && { cmp -s "$f" "$GAME/$f" || cat "$f" > "$GAME/$f"; }; done
 # console settings are created once; your save data in game/nand is never overwritten

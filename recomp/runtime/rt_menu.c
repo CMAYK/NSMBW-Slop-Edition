@@ -40,7 +40,7 @@ static struct {
     uint32_t widths, cmap;
     float atlas_w, atlas_h; int per_row;
 } gf;
-static int valid_ptr(uint32_t p) { return (p >= 0x80000000u && p < 0x81800000u) || (p >= 0x90000000u && p < 0x94000000u); }
+static int valid_ptr(uint32_t p) { return (p >= 0x80000000u && p < 0x81900000u) || (p >= 0x90000000u && p < 0x94000000u); }
 static void font_load(uint32_t textbox) {
     static int tries; if (tries++ > 3) return;
     uint32_t font = R32(textbox + 0xE4), finf = valid_ptr(font) ? R32(font + 0x14) : 0, tglp = valid_ptr(finf) ? R32(finf + 8) : 0;
@@ -177,9 +177,9 @@ void menu_layout_calc_hook(uint32_t layout, uint32_t root) {
     }
 }
 /* ---- title demo: players and camera ---- */
-static uint32_t title_players[4];                  /* dAcPy_c actors, from daPyMng_c::setPlayer */
+static uint32_t title_players[8];                  /* dAcPy_c actors, from daPyMng_c::setPlayer */
 void hle_setPlayer__9daPyMng_cFiP7dAcPy_c(ppc_context *ctx, uint8_t *base) {
-    if (ctx->r[3] < 4) title_players[ctx->r[3]] = ctx->r[4];
+    if (ctx->r[3] < 8) title_players[ctx->r[3]] = ctx->r[4];
     orig_setPlayer__9daPyMng_cFiP7dAcPy_c(ctx, base);
 }
 static void title_trace(void) {
@@ -187,7 +187,7 @@ static void title_trace(void) {
     if (!on || g_frames_presented % 20) return;
     uint32_t bp = R32(0x80429E00);   /* dBgParameter_c::ms_Instance_p (r13-22656) */
     char buf[1200]; int n = snprintf(buf, sizeof buf, "f %llu stage %u cam %.1f,%.1f |", (unsigned long long)g_frames_presented, R32(0x8042A200), bp ? rdf(bp + 0x38) : 0, bp ? rdf(bp + 0x3C) : 0);
-    for (int i = 0; i < 4; i++) if (title_players[i]) n += snprintf(buf + n, sizeof buf - n, " p%d %.1f,%.1f sp %.2f mx %.2f", i, rdf(title_players[i] + 0xAC), rdf(title_players[i] + 0xB0), rdf(title_players[i] + 0xE8), rdf(title_players[i] + 0xF4));
+    for (int i = 0; i < 8; i++) if (title_players[i]) n += snprintf(buf + n, sizeof buf - n, " p%d %.1f,%.1f sp %.2f mx %.2f", i, rdf(title_players[i] + 0xAC), rdf(title_players[i] + 0xB0), rdf(title_players[i] + 0xE8), rdf(title_players[i] + 0xF4));
     if (title_players[0] && g_frames_presented % 200 == 0) for (int o = 0; o < 0x2400; o += 4) { float v = rdf(title_players[0] + o); if (v == 1.5f && n < 1100) n += snprintf(buf + n, sizeof buf - n, " %X", o); }
     { uint32_t bg = R32(0x80429DD0u); if (bg) n += snprintf(buf + n, sizeof buf - n, " loop %.1f..%.1f w %.1f type %u", rdf(bg + 0x8FE64), rdf(bg + 0x8FE68), rdf(bg + 0x8FEA0), R32(0x8042A208u)); }
     rt_log("tdemo", "%s", buf);
@@ -206,7 +206,7 @@ static void title_trace(void) {
 #define WALK 1.5f
 #define RUN 3.25f
 enum { CAM_FOLLOW, CAM_OUTRUN, CAM_PARKED, CAM_RUNIN };
-static int cam_mode; static float cam_x, cam_rel[4]; static uint32_t cam_freeze_count, cam_paused, cam_last_count;
+static int cam_mode; static float cam_x, cam_rel[8]; static uint32_t cam_freeze_count, cam_paused, cam_last_count;
 static int cam_held(void) { return cam_mode != CAM_FOLLOW && R32(0x8042A204u) == 2; }   /* title (game mode 2) */
 static void cam_trace(void) {
     static int on = -1; if (on < 0) on = getenv("RT_CAMTRACE") != NULL;
@@ -231,7 +231,7 @@ void hle_fn_80154F60(ppc_context *ctx, uint8_t *base) {
     float lw = rdf(bg + 0x8FEA0), lr = rdf(bg + 0x8FE68), w = screen_w();
     if (lw > 100 && cam_x + w * 0.5f > lr) {               /* past the loop's end: same view one loop back */
         cam_x -= lw;
-        for (int i = 0; i < 4; i++) if (title_players[i] && rdf(title_players[i] + 0xAC) > lr - lw * 0.5f) {   /* (not already wrapped by the game) */
+        for (int i = 0; i < 8; i++) if (title_players[i] && rdf(title_players[i] + 0xAC) > lr - lw * 0.5f) {   /* (not already wrapped by the game) */
             wrf(title_players[i] + 0xAC, rdf(title_players[i] + 0xAC) - lw); wrf(title_players[i] + 0xB8, rdf(title_players[i] + 0xB8) - lw); }
     }
     float cy = rdf(bp + 0x3C);
@@ -251,17 +251,17 @@ static void set_speed(int i, float target) {
     wrf(p + 0xAC, rdf(p + 0xAC) + d); wrf(p + 0xB8, rdf(p + 0xB8) + d);
 }
 /* dGameKey_c::read: the title players read their (demo) remotes; holding 1 makes them run */
-static int run_key; static int runin_done[4];
+static int run_key; static int runin_done[8];
 void hle_read__10dGameKey_cFv(ppc_context *ctx, uint8_t *base) {
     uint32_t self = ctx->r[3];
     orig_read__10dGameKey_cFv(ctx, base);
-    if (run_key && cam_held()) for (int i = 0; i < 4; i++) { uint32_t c = R32(self + 4 + 4 * i); if (c && !(cam_mode == CAM_RUNIN && runin_done[i])) W32(c + 8, R32(c + 8) | 0x200); }
+    if (run_key && cam_held()) for (int i = 0; i < 8; i++) { uint32_t c = R32(self + 4 + 4 * i); if (c && !(cam_mode == CAM_RUNIN && runin_done[i])) W32(c + 8, R32(c + 8) | 0x200); }
 }
 static void cam_freeze(void) {                             /* the list opens */
     if (cam_mode == CAM_FOLLOW) {
         uint32_t bp = R32(G_BG_PARAM); if (!bp) return;
         cam_x = rdf(bp + 0x38);
-        for (int i = 0; i < 4; i++) cam_rel[i] = title_players[i] ? rdf(title_players[i] + 0xAC) - cam_x : 0;
+        for (int i = 0; i < 8; i++) cam_rel[i] = title_players[i] ? rdf(title_players[i] + 0xAC) - cam_x : 0;
         cam_freeze_count = R32(G_STAGE_COUNT);
         rt_log("tdemo", "camera runs on at %.1f (players at +%.1f +%.1f +%.1f +%.1f)", cam_x, cam_rel[0], cam_rel[1], cam_rel[2], cam_rel[3]);
     }
@@ -269,8 +269,8 @@ static void cam_freeze(void) {                             /* the list opens */
 }
 static void cam_return(void) {                             /* Back: run in from the left */
     if (cam_mode != CAM_OUTRUN && cam_mode != CAM_PARKED) return;
-    float maxrel = 0; for (int i = 0; i < 4; i++) if (cam_rel[i] > maxrel) maxrel = cam_rel[i];
-    for (int i = 0; i < 4; i++) if (title_players[i]) {
+    float maxrel = 0; for (int i = 0; i < 8; i++) if (cam_rel[i] > maxrel) maxrel = cam_rel[i];
+    for (int i = 0; i < 8; i++) if (title_players[i]) {
         float x = cam_x + cam_rel[i] - maxrel - 48;        /* same formation, just left of the screen */
         wrf(title_players[i] + 0xAC, x); wrf(title_players[i] + 0xB8, x);
         runin_done[i] = 0;
@@ -285,18 +285,18 @@ static void title_demo_update(void) {
     float w = screen_w();
     if (cam_mode == CAM_OUTRUN) {                          /* run until past the right edge */
         int off = 1;
-        for (int i = 0; i < 4; i++) if (title_players[i]) { set_speed(i, RUN); if (rdf(title_players[i] + 0xAC) < cam_x + w + 24) off = 0; }
+        for (int i = 0; i < 8; i++) if (title_players[i]) { set_speed(i, RUN); if (rdf(title_players[i] + 0xAC) < cam_x + w + 24) off = 0; }
         if (off) { cam_mode = CAM_PARKED; rt_log("tdemo", "players off screen"); }
     }
     if (cam_mode == CAM_PARKED)                            /* kept just past the right edge, out of view */
-        for (int i = 0; i < 4; i++) if (title_players[i]) {
+        for (int i = 0; i < 8; i++) if (title_players[i]) {
             float x = cam_x + w + 40 + i * 24;
             wrf(title_players[i] + 0xAC, x); wrf(title_players[i] + 0xB8, x);
             wrf(title_players[i] + P_SPEEDF, WALK); set_speed(i, WALK);
         }
     if (cam_mode == CAM_RUNIN) {                           /* each slows to a walk at its old place */
         int all = 1;
-        for (int i = 0; i < 4; i++) if (title_players[i] && !runin_done[i]) {
+        for (int i = 0; i < 8; i++) if (title_players[i] && !runin_done[i]) {
             float want = cam_x + cam_rel[i], x = rdf(title_players[i] + 0xAC), d = x - want;
             uint32_t bg = R32(G_BG); float lw = bg ? rdf(bg + 0x8FEA0) : 0;
             if (lw > 100) { if (d < -lw * 0.5f) d += lw; else if (d > lw * 0.5f) d -= lw; }   /* (across the loop) */
@@ -317,6 +317,8 @@ static void title_demo_update(void) {
 static int sp_skip(void) { return singleplayer_mode && R16(G_NOW_SCENE) == SCENE_GAME_SETUP; }
 #define SP_CODE_LO 0x807ABD00u                     /* the Select Players actor's code (REL) */
 #define SP_CODE_HI 0x807ACD00u
+uint32_t mod_game_addr(uint32_t a);
+static int sp_code(uint32_t lr) { lr = mod_game_addr(lr); return lr >= SP_CODE_LO && lr < SP_CODE_HI; }
 void hle_fn_2_3F000(ppc_context *ctx, uint8_t *base) {
     if (!sp_skip()) { orig_fn_2_3F000(ctx, base); return; }
     uint32_t self = ctx->r[3], sm = self + 112;
@@ -327,7 +329,7 @@ void hle_fn_2_3F000(ppc_context *ctx, uint8_t *base) {
     rt_log("menu", "singleplayer: 1 player");
 }
 void hle_isAnimOn__Q23m2d13EmbedLayout_cFi(ppc_context *ctx, uint8_t *base) {
-    if (sp_skip() && ctx->lr >= SP_CODE_LO && ctx->lr < SP_CODE_HI) { ctx->r[3] = 0; return; }
+    if (sp_skip() && sp_code(ctx->lr)) { ctx->r[3] = 0; return; }
     orig_isAnimOn__Q23m2d13EmbedLayout_cFi(ctx, base);
 }
 /* game setup music (fn_8019BA20(mgr, track)): track 0 plays on the file select, track 1 for
@@ -339,7 +341,7 @@ void hle_fn_8019BA20(ppc_context *ctx, uint8_t *base) {
 /* system sound filter (SndAudioMgr::startSystemSe): returns the id to play, 0 = none */
 uint32_t menu_filter_se(uint32_t id, uint32_t lr) {
     if (!sp_skip()) return id;
-    if (lr >= SP_CODE_LO && lr < SP_CODE_HI) return 0;              /* the hidden screen */
+    if (sp_code(lr)) return 0;              /* the hidden screen */
     if (id == 121 && lr == 0x8078405Cu) return 803;                  /* file picked: start sound */
     return id;
 }
@@ -490,6 +492,9 @@ static void start_game(int single) {
 uint32_t menu_filter_buttons(uint32_t b) {
     uint32_t pressed = b & ~prev_btn; prev_btn = b;
     uint64_t now = rt_now_ns();
+    { static int tr = -1; if (tr < 0) tr = getenv("RT_MENUTRACE") != NULL;
+      if (tr && g_frames_presented % 60 == 0) rt_log("menutrace", "scene %u mode %u title_seen %llu (frame %llu) press_ready %d tstate %d",
+          R16(G_NOW_SCENE), R32(G_GAME_MODE), (unsigned long long)title_seen_frame, (unsigned long long)g_frames_presented, press_ready, (int)tstate); }
     int scene = R16(G_NOW_SCENE);
     if (scene == SCENE_WORLD_MAP || (title_live() && !inject_until)) { singleplayer_mode = 0; fs_left_frame = 0; }   /* reached the map, or back at the title */
     if (inject_until) {                                     /* replay "2" until the game leaves the title */

@@ -23,3 +23,8 @@ nsmbw_log.txt
 nsmbw_profile.txt
 shadercache.bin
 settings.ini
+.xfer/
+
+# 8-player module (downloaded by tools/fetch_mod.py) and generated config
+recomp/mod/
+recomp/config/d_project/

@@ -209,7 +209,7 @@ static uint64_t texture_hash(uint32_t addr, uint32_t w, uint32_t h, uint32_t fmt
     static const int bh[16] = {8, 4, 4, 4, 4, 4, 4, 0, 8, 4, 4, 0, 0, 0, 8, 0};
     int tw = bw[fmt & 15] ? bw[fmt & 15] : 4, th = bh[fmt & 15] ? bh[fmt & 15] : 4;
     size_t bytes = (size_t)((w + tw - 1) / tw) * ((h + th - 1) / th) * (fmt == 6 ? 64 : 32);
-    { uint32_t pa = addr & 0x3FFFFFFF; if (!((pa + bytes <= 0x01800000u) || (pa >= 0x10000000u && pa + bytes <= 0x14000000u))) bytes = 0; }
+    { uint32_t pa = addr & 0x3FFFFFFF; if (!((pa + bytes <= 0x01900000u) || (pa >= 0x10000000u && pa + bytes <= 0x14000000u))) bytes = 0; }
     static int full = -1; if (full < 0) full = getenv("RT_TEXFULLHASH") != NULL;
     uint64_t hv = (full || hash_full_next) ? XXH3_64bits(g_base + (addr & 0x3FFFFFFF), bytes) ^ bytes : hash_sampled(g_base + (addr & 0x3FFFFFFF), bytes);
     hash_full_next = 0;
@@ -227,7 +227,7 @@ static uint64_t texture_hash(uint32_t addr, uint32_t w, uint32_t h, uint32_t fmt
 static int band_eligible(texent *t) {
     size_t n = tex_bytes(t->w, t->h, t->fmt);
     uint32_t pa = t->addr & 0x3FFFFFFF;
-    if (!((pa + n <= 0x01800000u) || (pa >= 0x10000000u && pa + n <= 0x14000000u))) return 0;
+    if (!((pa + n <= 0x01900000u) || (pa >= 0x10000000u && pa + n <= 0x14000000u))) return 0;
     return n >= 128 * 1024 && !(t->fmt >= 8 && t->fmt <= 10) && !t->hd;
 }
 static void band_hashes(texent *t, int compare) {
@@ -272,7 +272,7 @@ static void tex_hd_lookup(texent *t, int map) {
     static const int bh[16] = {8, 4, 4, 4, 4, 4, 4, 0, 8, 4, 4, 0, 0, 0, 8, 0};
     int tw = bw[t->fmt & 15] ? bw[t->fmt & 15] : 4, th = bh[t->fmt & 15] ? bh[t->fmt & 15] : 4;
     size_t bytes = (size_t)((t->w + tw - 1) / tw) * ((t->h + th - 1) / th) * (t->fmt == 6 ? 64 : 32);
-    { uint32_t pa = t->addr & 0x3FFFFFFF; if (!((pa + bytes <= 0x01800000u) || (pa >= 0x10000000u && pa + bytes <= 0x14000000u))) return; }
+    { uint32_t pa = t->addr & 0x3FFFFFFF; if (!((pa + bytes <= 0x01900000u) || (pa >= 0x10000000u && pa + bytes <= 0x14000000u))) return; }
     int g = map >> 2, i = map & 3; uint32_t mode0 = bp((g ? 0xA0 : 0x80) + i);
     size_t to = t->tlut & (sizeof tmem - 1);
     t->hd = hd_lookup(g_base + (t->addr & 0x3FFFFFFF), bytes, tmem + to, sizeof tmem - to, t->w, t->h, t->fmt, ((mode0 >> 5) & 3) != 0);

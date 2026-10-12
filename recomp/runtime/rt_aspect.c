@@ -136,11 +136,11 @@ static void fix_letterbox_ortho(uint32_t fr) {
    often the room's exit pipes - would be off screen and out of reach. For such cameras the view
    follows the players horizontally instead, kept within the width the 16:9 picture would have
    shown (and within the zone). Player positions come from daPyMng_c::getPlayer results. */
-static uint32_t pl_ptr[4]; static uint64_t pl_seen[4];
+static uint32_t pl_ptr[8]; static uint64_t pl_seen[8];
 void hle_getPlayer__9daPyMng_cFi(ppc_context *ctx, uint8_t *base) {
     uint32_t i = ctx->r[3];
     orig_getPlayer__9daPyMng_cFi(ctx, base);
-    if (i < 4 && ctx->r[3]) { pl_ptr[i] = ctx->r[3]; pl_seen[i] = g_frames_presented; }
+    if (i < 8 && ctx->r[3]) { pl_ptr[i] = ctx->r[3]; pl_seen[i] = g_frames_presented; }
 }
 static float get_f(uint32_t a) { uint32_t u = R32(a); float f; memcpy(&f, &u, 4); return f; }
 void aspect_camera_fix(void) {
@@ -158,7 +158,7 @@ void aspect_camera_fix(void) {
       if (tr && g_frames_presented % 60 == 0) rt_log("aspect", "zone %.0f-%.0f w %.1f lw %.1f tx %.1f w169 %.1f fixed %d players %08X/%llu", zl, zr, w, lw, tx, w169, fixed, pl_ptr[0], (unsigned long long)(g_frames_presented - pl_seen[0])); }
     if (!fixed) { active = 0; return; }
     float sx = 0; int n = 0;
-    for (int i = 0; i < 4; i++) if (pl_ptr[i] && g_frames_presented - pl_seen[i] <= 2) { sx += get_f(pl_ptr[i] + 0xAC); n++; }
+    for (int i = 0; i < 8; i++) if (pl_ptr[i] && g_frames_presented - pl_seen[i] <= 2) { sx += get_f(pl_ptr[i] + 0xAC); n++; }
     if (!n) return;
     float want = sx / n - w * 0.5f;
     float lo = c - w169 * 0.5f, hi = c + w169 * 0.5f - w;          /* what the 16:9 picture covers */
