@@ -7,6 +7,7 @@
  *   TextBox: +0xE4 font (nw4r::ut::ResFont)
  * RT_LYTDUMP=1 logs every layout's pane tree once. */
 #include "rt.h"
+RT_STATE_FILE                                   /* (this file's variables are part of a save state: rt_state.c) */
 
 #define P_CHILDREN 0x10
 #define P_ALPHA 0xB8
@@ -37,6 +38,11 @@ static void dump_tree(uint32_t pane, int depth, char *buf, size_t *n, size_t cap
     { float t[6]; for (int i = 0; i < 6; i++) { uint32_t u = R32(pane + (i < 2 ? 0x2C + 4 * i : 0x4C + 4 * (i - 2))); memcpy(&t[i], &u, 4); }
       *n += snprintf(buf + *n, cap - *n, "%*s%s (%08X a %u f %02X) t %.0f,%.0f s %.2f,%.2f", depth * 2, "", nm, pane, R8(pane + P_ALPHA), R8(pane + P_FLAGS), t[0], t[1], t[2], t[3]); }
     if (nm[0] == 'T' && nm[1] == '_') {                    /* text box: show fields + where its font data is */
+        { uint32_t tb = R32(pane + 0xD8); int len = R16(pane + 0xFE); char txt[80]; int k = 0;   /* text (UTF-16; tags shown as {..}) */
+          if (tb >= 0x80000000u && tb < 0x94000000u) for (int i = 0; i < len && k < 72; i++) { uint16_t c = R16(tb + 2 * i);
+              if (c == 0x1A) { int tl = R8(tb + 2 * i + 2); k += snprintf(txt + k, sizeof txt - k, "{tag}"); i += tl / 2 - 1; continue; }
+              txt[k++] = (c >= 0x20 && c < 0x7F) ? (char)c : '?'; }
+          txt[k] = 0; *n += snprintf(buf + *n, cap - *n, " \"%s\"", txt); }
         for (int o = 0xD8; o < 0x108; o += 4) *n += snprintf(buf + *n, cap - *n, " %X:%08X", o, R32(pane + o));
         uint32_t f = R32(pane + 0xE4);
         if (f >= 0x80000000u && f < 0x94000000u) for (int o = 0; o < 0x40; o += 4) { uint32_t q = R32(f + o);
@@ -77,6 +83,14 @@ void hle_Draw__Q34nw4r3lyt6LayoutFRCQ34nw4r3lyt8DrawInfo(ppc_context *ctx, uint8
 
 /* dScene_c::setNextScene(profile, param, force): log scene changes (and who asked) */
 void hle_DoSceneChange__FUsUiUi(ppc_context *ctx, uint8_t *base) {
+    /* the boot's first request (RESTART_CRSIN = the title; asked again every frame until it
+       goes through) waits while the update screen is up (rt_update.c, rt_menu.c) */
+    {   int boot_kb_hold(void);                                          /* (rt_bootscreen.c: "Do not hold your keyboard sideways." first) */
+        if ((ctx->r[3] & 0xFFFF) == 6 && boot_kb_hold()) return; }
+    if ((ctx->r[3] & 0xFFFF) == 6 && update_boot_hold()) {
+        void boot_update_frame(ppc_context *ctx, uint8_t *base); boot_update_frame(ctx, base);   /* (rt_bootscreen.c: the layout back in) */
+        return;
+    }
     rt_log("scene", "next scene %u (param %08X%s) requested from %08X (%s)", ctx->r[3] & 0xFFFF, ctx->r[4], ctx->r[5] ? ", forced" : "", ctx->lr, rt_func_name(ctx->lr, NULL));
     orig_DoSceneChange__FUsUiUi(ctx, base);
 }

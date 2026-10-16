@@ -10,6 +10,7 @@
  *   OUTPUT      write the final stereo frame to main memory, where the audio DMA plays it from
  * Not emulated: remote-speaker mixes, low-pass/biquad filters, initial time delay, DPL2. */
 #include "rt.h"
+RT_STATE_FILE                                   /* (this file's variables are part of a save state: rt_state.c) */
 
 /* PB (parameter block) layout, Wii AX (0x140 bytes) */
 enum {

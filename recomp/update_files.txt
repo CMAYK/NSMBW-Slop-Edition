@@ -1,0 +1,7 @@
+# Files players get, relative to the game folder (patterns: * ? and folder/ for everything in it).
+# Lines starting with ! leave files out. Player data and the disc are never published.
+nsmbw.exe
+orig/
+mod/
+ui/
+!mod/*.zip

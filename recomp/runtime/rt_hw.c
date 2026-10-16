@@ -1,6 +1,7 @@
 /* rt_hw.c - Wii hardware registers: PI, VI, MI, DSP/AI, EXI (RTC/SRAM), SI, write-gather pipe.
  * Registers we don't model are kept as plain storage so reads return what was written. */
 #include "rt.h"
+RT_STATE_FILE                                   /* (this file's variables are part of a save state: rt_state.c) */
 
 static uint8_t regs[0x10000];          /* backing store for 0x0C00xxxx */
 static uint8_t regs_hw[0x10000];       /* backing store for 0x0D00xxxx */
@@ -22,6 +23,8 @@ static void wr_store(uint8_t *s, uint32_t off, uint32_t v, int size) {
 static uint32_t pi_intsr, pi_intmr, pi_fifo_base, pi_fifo_end, pi_fifo_wptr;
 void pi_set(uint32_t bits, int on) { if (on) pi_intsr |= bits; else pi_intsr &= ~bits; }
 uint32_t pi_active(void) { return pi_intsr & pi_intmr; }
+uint32_t pi_intsr_dbg(void) { return pi_intsr; }
+uint32_t pi_intmr_dbg(void) { return pi_intmr; }
 
 /* ------------------------------------------------------------------ VI */
 static uint16_t vi[0x80 / 2];
@@ -34,21 +37,23 @@ static void vi_update_irq(void) {
     pi_set(PI_VI, any);
 }
 static uint32_t vi_line(void) {
-    uint64_t t = (rt_now_ns() - vi_t0) % VI_FIELD_NS;
+    uint64_t t = (rt_emu_ns() - vi_t0) % VI_FIELD_NS;
     return 1 + (uint32_t)(t * 263 / VI_FIELD_NS);
 }
 
 uint64_t g_vi_fields;
 void hw_update(void) {
-    uint64_t f = (rt_now_ns() - vi_t0) / VI_FIELD_NS;
+    uint64_t f = (rt_emu_ns() - vi_t0) / VI_FIELD_NS;
     if (f != vi_field) {
         vi_field = f; g_vi_fields++;
+        if (g_det) det_field();                       /* (inputs for this field; checks) */
         plat_pump(); { extern void rt_funcstat_tick(void); rt_funcstat_tick(); }
         for (int i = 0; i < 2; i++) {
             int r = (0x30 + 4 * i) / 2;
             if (vi[r] & 0x1000) vi[r] |= 0x8000;      /* raise status if enabled */
         }
         vi_update_irq();
+        si_tick();                                    /* GameCube controller polling (rt_si.c) */
     }
     ai_dma_tick();
     ios_update();
@@ -81,7 +86,7 @@ static void exi_transfer(int ch) {
         } else if (rw == 0) {                     /* read */
             uint32_t off = (exi_cmd >> 6) & 0xFF;
             if ((exi_cmd & 0x7FFFFF00) == 0x20000000 && !(exi_cmd & 0x100)) {   /* RTC */
-                uint32_t secs = (uint32_t)(rt_now_ns() / 1000000000ull) + 0x386D4380u;  /* ~2000 epoch */
+                uint32_t secs = g_det ? det_rtc_secs() : (uint32_t)(rt_now_ns() / 1000000000ull) + 0x386D4380u;  /* ~2000 epoch */
                 exi_reg[ch][4] = secs;
             } else if (dma) {
                 uint32_t mar = exi_reg[ch][1], n = exi_reg[ch][2];
@@ -143,7 +148,7 @@ static uint64_t dsp_irq_at;                   /* delayed "work done" interrupt *
 static void dsp_mail_irq(uint32_t m, uint64_t delay_ns) {
     dsp_mail(m);
     if (!delay_ns) { dsp[0x0A / 2] |= 0x80; dsp_update_irq(); }
-    else dsp_irq_at = rt_now_ns() + delay_ns;
+    else dsp_irq_at = rt_emu_ns() + delay_ns;
 }
 /* Advance AX voices like the DSP would (no mixing yet): each command list covers one audio
  * frame; running voices move their playback address, loop, or stop at the end. Without this,
@@ -313,14 +318,14 @@ static void dsp_write(uint32_t r, uint16_t v) {
     if (r == 0x2A) {                                         /* ARAM DMA count: run it now */
         uint32_t mm = ((uint32_t)dsp[0x20 / 2] << 16) | dsp[0x22 / 2], ar = ((uint32_t)dsp[0x24 / 2] << 16) | dsp[0x26 / 2];
         uint32_t cnt = (((uint32_t)dsp[0x28 / 2] << 16) | v) & 0x7FFFFFFF; int to_main = (dsp[0x28 / 2] >> 15) & 1;
-        static uint8_t *aram; if (!aram) aram = calloc(1, 16u << 20);
+        uint8_t *aram = rt_aram();                    /* (16 MB at a fixed address: rt_state.c) */
         ar &= 0xFFFFFF; if (ar + cnt > (16u << 20)) cnt = (16u << 20) - ar;
         if (to_main) memcpy(G(0x80000000u | mm), aram + ar, cnt); else memcpy(aram + ar, G(0x80000000u | mm), cnt);
         dsp[0x0A / 2] |= CSR_ARINT; dsp_update_irq();
     }
 }
 static void ai_dma_tick(void) {
-    if (dsp_irq_at && rt_now_ns() >= dsp_irq_at) { dsp_irq_at = 0; dsp[0x0A / 2] |= 0x80; dsp_update_irq(); }
+    if (dsp_irq_at && rt_emu_ns() >= dsp_irq_at) { dsp_irq_at = 0; dsp[0x0A / 2] |= 0x80; dsp_update_irq(); }
     uint16_t ctl = dsp[0x36 / 2];
     /* the DMA runs continuously while enabled: re-arming it from the interrupt handler just queues
        the next block, so timing is only re-anchored when it is started from the stopped state
@@ -328,7 +333,7 @@ static void ai_dma_tick(void) {
     if (!(ctl & 0x8000)) { aidma_next_ns = 0; return; }
     uint32_t bytes = (uint32_t)(ctl & 0x7FFF) * 32;
     uint64_t period = (uint64_t)bytes * 1000000000ull / (32000 * 4);
-    uint64_t now = rt_now_ns();
+    uint64_t now = rt_emu_ns();
     if (!aidma_next_ns) aidma_next_ns = now + period;
     if (now >= aidma_next_ns) {
         /* one buffer has been played: hand it to the host. If the game fell behind, deliver the
@@ -343,7 +348,10 @@ static void ai_dma_tick(void) {
             pcm[2 * i + 1] = (int16_t)R16(0x80000000u | (src + 4 * i));
             pcm[2 * i] = (int16_t)R16(0x80000000u | (src + 4 * i + 2));
         }
-        plat_audio_push(pcm, (int)frames);
+        if (!g_resim) {                                         /* (fields run again after a rollback: not heard twice) */
+            sfx_mix(pcm, (int)frames);                          /* (our own sounds: rt_sfx.c) */
+            plat_audio_push(pcm, (int)frames);
+        }
         { static uint64_t st_t0, st_frames, st_resets; st_frames += frames;      /* delivery-rate check, logged every 10 s */
           if (now > aidma_next_ns + 90000000ull) st_resets++;
           if (!st_t0) st_t0 = now;
@@ -355,13 +363,56 @@ static void ai_dma_tick(void) {
     }
 }
 
+/* when the next timed hardware event is due (VI field, audio DMA block, delayed DSP interrupt):
+   the idle loop can sleep until then instead of spinning (rt_core.c) */
+uint64_t hw_next_event_ns(void) {
+    uint64_t next = vi_t0 + (vi_field + 1) * VI_FIELD_NS;
+    if (aidma_next_ns && aidma_next_ns < next) next = aidma_next_ns;
+    if (dsp_irq_at && dsp_irq_at < next) next = dsp_irq_at;
+    return next;
+}
+
 /* ------------------------------------------------------------------ dispatch */
 static void log_unknown(const char *what, uint32_t p, uint32_t v, int size) {
     if (unknown_logged++ < 200) LOG("mmio", "%s %08X (%d bytes) %08X", what, p, size, v);
 }
 
+
+/* RT_MMIO_INVENTORY=file (testing, track A of docs/NATIVE_ROADMAP.md): every distinct
+   (guest function, hardware block, read/write) that touches a hardware register is written to
+   the file when the game exits - the list of what still talks to the emulated hardware. The
+   guest function is found from the host return address (the recompiled function's code). */
+static int inv_on = -1; static FILE *inv_f;
+static struct { const void *fn; uint32_t addr; } *inv_fns; static int inv_nfns;
+static uint32_t inv_seen[4096]; static int inv_nseen;
+static int inv_cmp(const void *a, const void *b) { const char *x = *(const char *const *)a, *y = *(const char *const *)b; return x < y ? -1 : x > y; }
+static void inv_init(void) {
+    const char *f = getenv("RT_MMIO_INVENTORY"); inv_on = f != NULL;
+    if (!inv_on) return;
+    inv_f = fopen(f, "w");
+    inv_fns = malloc(sizeof *inv_fns * ppc_func_count);
+    for (uint32_t i = 0; i < ppc_func_count; i++) { inv_fns[i].fn = (const void *)ppc_func_table[i].fn; inv_fns[i].addr = ppc_func_table[i].addr; }
+    inv_nfns = (int)ppc_func_count;
+    qsort(inv_fns, inv_nfns, sizeof *inv_fns, inv_cmp);
+}
+static void inv_note(uint32_t p, int write, const void *ra) {
+    if (inv_on < 0) inv_init();
+    if (!inv_on || !inv_f) return;
+    int lo = 0, hi = inv_nfns;
+    while (lo < hi) { int m = (lo + hi) / 2; if ((const char *)inv_fns[m].fn <= (const char *)ra) lo = m + 1; else hi = m; }
+    uint32_t g = lo ? inv_fns[lo - 1].addr : 0;
+    uint32_t blk = (p & 0x0FFFFC00u) | (uint32_t)write;
+    uint32_t key = g ^ (blk * 2654435761u);
+    for (int i = 0; i < inv_nseen; i++) if (inv_seen[i] == key) return;
+    if (inv_nseen < 4096) inv_seen[inv_nseen++] = key;
+    fprintf(inv_f, "%08X %s %s %08X\n", g, rt_func_name(g, NULL), write ? "W" : "R", p);
+    fflush(inv_f);
+}
+
 uint32_t mmio_read(uint32_t p, int size) {
+    if (inv_on) inv_note(p, 0, __builtin_return_address(0));
     uint32_t off = p & 0xFFFF;
+    if (g_det) g_vt_ns += 50;                                /* (a loop reading a counter with interrupts off still gets there) */
     if (p < 0x0D000000) {
         switch (off & 0xF000) {
         case 0x0000: return gx_cp_read(off & 0xFFF, size);
@@ -402,22 +453,19 @@ uint32_t mmio_read(uint32_t p, int size) {
         if (r == 8) {                                   /* sample counter runs while playing */
             if (ai_cr & 1) {
                 uint64_t rate = (ai_cr & 2) ? 48000 : 32000;
-                ai_scnt = ai_scnt0 + (uint32_t)((rt_now_ns() - ai_t0) * rate / 1000000000ull);
+                ai_scnt = ai_scnt0 + (uint32_t)((rt_emu_ns() - ai_t0) * rate / 1000000000ull);
             }
             return ai_scnt;
         }
         if (r == 12) return ai_it;
     }
-    if (off >= 0x6400 && off < 0x6500) {                           /* SI: no GC controllers */
-        uint32_t r = off - 0x6400;
-        if (r == 0x38) return 0;                                    /* SISR */
-        return rd_store(regs_hw, off, size);
-    }
+    if (off >= 0x6400 && off < 0x6500) return si_read_sized(off - 0x6400, size);      /* SI: rt_si.c */
     log_unknown("read ", p, 0, size);
     return rd_store(regs_hw, off, size);
 }
 
 void mmio_write(uint32_t p, uint32_t v, int size) {
+    if (inv_on) inv_note(p, 1, __builtin_return_address(0));
     uint32_t off = p & 0xFFFF;
     if (p < 0x0D000000) {
         if ((off & 0xF000) == 0x8000) { gx_fifo_write(v, size); return; }   /* write-gather pipe */
@@ -454,15 +502,16 @@ void mmio_write(uint32_t p, uint32_t v, int size) {
     }
     if (off < 0x400) { ios_mmio_write(off, v); return; }
     if (off >= 0x6800 && off < 0x6840) { exi_write(off - 0x6800, v); return; }
+    if (off >= 0x6400 && off < 0x6500) { si_write_sized(off - 0x6400, v, size); return; }
     if (off >= 0x6C00 && off < 0x6C20) {
         uint32_t r = off - 0x6C00;
         if (r == 0) {
             if ((ai_cr & 1) && !(v & 1)) {               /* stopping: freeze the counter */
                 uint64_t rate = (ai_cr & 2) ? 48000 : 32000;
-                ai_scnt = ai_scnt0 + (uint32_t)((rt_now_ns() - ai_t0) * rate / 1000000000ull);
+                ai_scnt = ai_scnt0 + (uint32_t)((rt_emu_ns() - ai_t0) * rate / 1000000000ull);
             }
             if (v & 0x20) ai_scnt = 0;                   /* SCRESET */
-            if (!(ai_cr & 1) && (v & 1)) { ai_t0 = rt_now_ns(); ai_scnt0 = ai_scnt; }
+            if (!(ai_cr & 1) && (v & 1)) { ai_t0 = rt_emu_ns(); ai_scnt0 = ai_scnt; }
             ai_cr = (v & ~0x28u) | (ai_cr & 0x8u & ~(v & 0x8u));
         } else if (r == 4) ai_vr = v; else if (r == 8) ai_scnt = v; else if (r == 12) ai_it = v;
         return;
@@ -471,19 +520,7 @@ void mmio_write(uint32_t p, uint32_t v, int size) {
     wr_store(regs_hw, off, v, size);
 }
 
-/* the CPU side of the GX FIFO: also mirror bytes into the PI FIFO ring like the hardware */
-void hw_pi_fifo_advance(uint32_t v, int size) {
-    if (!pi_fifo_end) return;
-    for (int i = size - 1; i >= 0; i--) {
-        g_base[pi_fifo_wptr & 0x03FFFFFF] = (uint8_t)(v >> (8 * i));
-        pi_fifo_wptr++;
-        if ((pi_fifo_wptr & 0x03FFFFFF) >= pi_fifo_end) pi_fifo_wptr = pi_fifo_base | ((pi_fifo_wptr ^ (1u << 26)) & (1u << 26));
-    }
-}
-
 void hw_init(void) {
-    vi_t0 = rt_now_ns();
+    vi_t0 = rt_emu_ns();
     sram_init();
 }
-uint32_t hw_pi_fifo_wptr(void) { return pi_fifo_wptr; }
-uint32_t hw_pi_fifo_base(void) { return pi_fifo_base; }

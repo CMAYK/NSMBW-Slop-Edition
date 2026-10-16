@@ -1,16 +1,39 @@
 #!/usr/bin/env python3
-"""Statically link mkwcat's nsmbw-project module (d_project.rel + the USA rev 2 import table)
-at a fixed address, the way its loader + OSLinkFixed would at runtime.
+"""Statically link the 8-player module (d_project.rel + the USA rev 2 import table; see
+THIRD_PARTY_NOTICES.md) at a fixed address, the way its loader + OSLinkFixed would at runtime.
 
 Output: linked/d_project.bin (image from MOD_BUF) and an entry in linked/mod.json.
+The module's save file names and its crash screen's link to its issue tracker are replaced
+with this port's (rename_strings), so the game's NAND sees nsmbw-save*.json directly.
 """
-import json, os, struct, sys
+import json, os, re, struct, sys
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 MOD_BUF = 0x81800000   # just past the end of MEM1: free in the runtime's 1 GB guest map
 
 R_ADDR32, R_ADDR24, R_ADDR16, R_LO, R_HI, R_HA, R_ADDR14 = 1, 2, 3, 4, 5, 6, 7
 R_REL24, R_REL14 = 10, 11
 R_NOP, R_SECTION, R_END = 201, 202, 203
+
+
+# save files: "<name>-nsmbw[-old|-tmp].json" -> "nsmbw-save[-old|-tmp].json", the short
+# "<name>.json" (for consoles that limit file names) -> "nsmbws.json"; always the same length
+# or shorter (the rest is zero-filled), so nothing moves
+SAVE_NAME = re.compile(rb'(?<=\0)(/tmp/|/)?([a-z]+)(-nsmbw)?(-old|-tmp)?\.json\0')
+ISSUES_URL = re.compile(rb'(?<=\0)https://github\.com/[\w.-]+/nsmbw-project/issues\0')
+
+
+def rename_strings(img):
+    img = bytearray(img); n = 0
+    for m in list(SAVE_NAME.finditer(bytes(img))):
+        new = (m.group(1) or b'') + (b'nsmbw-save' if m.group(3) else b'nsmbws') + (m.group(4) or b'') + b'.json'
+        old = m.group(0)
+        if new + b'\0' == old: continue
+        img[m.start():m.end()] = new + b'\0' * (len(old) - len(new)); n += 1
+    for m in list(ISSUES_URL.finditer(bytes(img))):
+        new = b'see nsmbw_log.txt'
+        img[m.start():m.end()] = new + b'\0' * (len(m.group(0)) - len(new)); n += 1
+    if n: print(f'{n} module strings renamed')
+    return bytes(img)
 
 
 def load(rel_path, imp_path):
@@ -76,7 +99,7 @@ def main():
             self_relocs.append((P, S, typ, mod_id)); n += 1
         stats[mod_id] = n
     out = os.path.join(ROOT, 'linked'); os.makedirs(out, exist_ok=True)
-    img = bytes(d[:M['fix']])
+    img = rename_strings(bytes(d[:M['fix']]))
     open(os.path.join(out, 'd_project.bin'), 'wb').write(img)
     names = {1: '.text', 2: '.data'}
     sections = []

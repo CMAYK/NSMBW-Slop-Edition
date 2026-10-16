@@ -3,45 +3,44 @@
  * interrupts, and hands draw calls and EFB copies to the renderer (rt_gxrender.c). */
 #include "rt.h"
 #include "rt_gx.h"
+RT_STATE_FILE                                   /* (this file's variables are part of a save state: rt_state.c) */
 
 gx_state gx;
-extern void hw_pi_fifo_advance(uint32_t v, int size);
-extern uint32_t hw_pi_fifo_wptr(void);
-extern uint32_t hw_pi_fifo_base(void);
 
 /* ------------------------------------------------------------------ CP / PE registers */
 static uint16_t cp_regs[0x80 / 2];
 static uint16_t pe_regs[0x100 / 2];
 static uint16_t pe_token;
 
+/* The GX library no longer reaches these registers (its register pointers point at plain memory,
+   rt_gx.c "the GX FIFO, native"); an access means something new does - logged once. */
+static void hw_unexpected(const char *what, uint32_t reg) { static int n; if (n++ < 4) rt_log("gx", "unexpected %s register access %03X (track A1: should not happen)", what, reg); }
 uint32_t gx_cp_read(uint32_t reg, int size) {
-    reg &= 0x7F;
+    reg &= 0x7F; hw_unexpected("CP", reg);
     switch (reg) {
     case 0x00: return 0x0C | 0x02;                         /* GP idle (cmd + read), underflow */
     case 0x30: case 0x32: return 0;                         /* read/write distance: drained */
-    case 0x34: case 0x38: { uint32_t w = hw_pi_fifo_wptr() & 0x03FFFFE0; return reg == 0x34 || reg == 0x38 ? (w & 0xFFFF) : 0; }
-    case 0x36: case 0x3A: return (hw_pi_fifo_wptr() >> 16) & 0x3FFF;
     }
     if (size == 4) return ((uint32_t)cp_regs[reg / 2] << 16) | cp_regs[reg / 2 + 1];
     return cp_regs[reg / 2];
 }
 void gx_cp_write(uint32_t reg, uint32_t v, int size) {
-    reg &= 0x7F;
+    reg &= 0x7F; hw_unexpected("CP", reg);
     if (size == 4) { cp_regs[reg / 2] = v >> 16; cp_regs[reg / 2 + 1] = (uint16_t)v; }
     else cp_regs[reg / 2] = (uint16_t)v;
 }
-static void pe_update_irq(void) {
+static void pe_update_irq(void) {                         /* (token / finish: always enabled - __GXPEInit enables both) */
     uint16_t ctl = pe_regs[0x0A / 2];
-    pi_set(PI_PE_TOKEN, (ctl & 1) && (ctl & 4));
-    pi_set(PI_PE_FINISH, (ctl & 2) && (ctl & 8));
+    pi_set(PI_PE_TOKEN, (ctl & 4) != 0);
+    pi_set(PI_PE_FINISH, (ctl & 8) != 0);
 }
 uint32_t gx_pe_read(uint32_t reg, int size) {
-    reg &= 0xFF; (void)size;
+    reg &= 0xFF; (void)size; hw_unexpected("PE", reg);
     if (reg == 0x0E) return pe_token;
     return pe_regs[reg / 2];
 }
 void gx_pe_write(uint32_t reg, uint32_t v, int size) {
-    reg &= 0xFF; (void)size;
+    reg &= 0xFF; (void)size; hw_unexpected("PE", reg);
     if (reg == 0x0A) {                                      /* status bits are write-1-to-clear */
         uint16_t st = pe_regs[0x0A / 2] & 0x0C;
         st &= ~(v & 0x0C);
@@ -152,7 +151,7 @@ static void load_bp(uint32_t v) {
 
 /* ------------------------------------------------------------------ command parser */
 static uint8_t fifo[1 << 20]; static uint32_t fifo_len;
-uint64_t g_gx_draws, g_gx_cmds;
+uint64_t g_gx_draws RT_LOCAL, g_gx_cmds RT_LOCAL;
 
 /* parse commands from p[0..len); returns bytes consumed (stops at an incomplete command) */
 static uint32_t parse(const uint8_t *p, uint32_t len, int depth) {
@@ -197,22 +196,102 @@ static uint32_t parse(const uint8_t *p, uint32_t len, int depth) {
     return o;
 }
 
-static FILE *fifo_dump; static int fifo_dump_init;
+/* ------------------------------------------------------------------ the GX FIFO, native (track A1)
+ * The GX library writes commands to the write-gather pipe; where they go depends on its FIFO
+ * setup: the "CPU FIFO" is the buffer it writes, the "GP FIFO" the one the graphics chip reads.
+ * When they are the same buffer ("linked", the normal case) the commands are executed at once
+ * here; otherwise (a display list being recorded, GXBeginDisplayList) they are written into the
+ * CPU FIFO's buffer in memory. The library's FIFO functions are partly native (below): its
+ * hardware register pointers point at plain memory, and the few values it reads back (write
+ * pointer, GP read pointer / count, GP status) come from here. docs/NATIVE_ROADMAP.md */
+#define GX_R13            0x8042F680u
+#define GX_DATA_PTR       (0x80433080u - 0x4EF8u)      /* __GXData (r2 - 0x4EF8) */
+#define GX_CPU_SET        (GX_R13 - 0x4DC8u)          /* u8: a CPU FIFO is set */
+#define GX_GP_SET         (GX_R13 - 0x4DC7u)          /* u8: a GP FIFO is set */
+#define GX_LINKED         (GX_R13 - 0x4DB0u)          /* u8: CPU FIFO == GP FIFO */
+#define GX_CPU_FIFO       0x80390224u                  /* the library's copies of the FIFO objects */
+#define GX_GP_FIFO        0x80390200u
+#define GX_REG_CP         (GX_R13 - 0x4DECu)          /* the library's register pointers */
+#define GX_REG_PI         (GX_R13 - 0x4DF0u)
+#define GX_REG_PE         (GX_R13 - 0x4DE8u)
+#define GX_REG_MEM        (GX_R13 - 0x4DE4u)
+#define GX_REG_SHADOW     0x82000000u                  /* where they point: plain memory (0x82000000 + the old offsets) */
+enum { FO_BASE = 0, FO_TOP = 4, FO_SIZE = 8, FO_RDPTR = 0x14, FO_WRPTR = 0x18, FO_COUNT = 0x1C, FO_WRAP = 0x20 };
+static uint32_t sink_base, sink_top, sink_wptr; static int sink_wrap, sink_on, sink_linked;
+
+static FILE *fifo_dump RT_LOCAL; static int fifo_dump_init RT_LOCAL;
+static void execute_pending(void) {
+    uint32_t used = parse(fifo, fifo_len, 0);
+    if (used) { memmove(fifo, fifo + used, fifo_len - used); fifo_len -= used; }
+    if (fifo_len > sizeof fifo - 64) rt_fatal("GX FIFO parse stalled (%u bytes pending, first %02X)", fifo_len, fifo[0]);
+}
 void gx_fifo_write(uint32_t v, int size) {
-    hw_pi_fifo_advance(v, size);
     if (!fifo_dump_init) { fifo_dump_init = 1; const char *p = getenv("RT_FIFO_DUMP"); if (p) fifo_dump = fopen(p, "wb"); }
     if (fifo_dump) { for (int i = size - 1; i >= 0; i--) fputc((uint8_t)(v >> (8 * i)), fifo_dump); fflush(fifo_dump); }
-    for (int i = size - 1; i >= 0; i--) fifo[fifo_len++] = (uint8_t)(v >> (8 * i));
-    /* only execute while the CPU FIFO is the GP's FIFO; otherwise the game is recording a
-       display list into memory (GXBeginDisplayList) and the GP must not see it yet */
-    uint32_t gp_base = (((uint32_t)cp_regs[0x22 / 2] << 16) | cp_regs[0x20 / 2]) & 0x03FFFFE0;
-    if (gp_base != (hw_pi_fifo_base() & 0x03FFFFE0)) { fifo_len -= size; return; }
-    if (fifo_len >= 32 || fifo_len >= sizeof fifo - 8) {
-        uint32_t used = parse(fifo, fifo_len, 0);
-        if (used) { memmove(fifo, fifo + used, fifo_len - used); fifo_len -= used; }
-        if (fifo_len > sizeof fifo - 64) rt_fatal("GX FIFO parse stalled (%u bytes pending, first %02X)", fifo_len, fifo[0]);
+    if (sink_linked) {                                       /* executed (batched: commands can span writes) */
+        for (int i = size - 1; i >= 0; i--) fifo[fifo_len++] = (uint8_t)(v >> (8 * i));
+        if (fifo_len >= 32 || fifo_len >= sizeof fifo - 8) execute_pending();
+        return;
+    }
+    if (!sink_on) return;                                    /* (no CPU FIFO: the hardware drops it too) */
+    for (int i = size - 1; i >= 0; i--) {                    /* recorded into the CPU FIFO's buffer */
+        g_base[PPC_PHYS(sink_wptr)] = (uint8_t)(v >> (8 * i));
+        if (++sink_wptr >= sink_top + 4) { sink_wptr = sink_base; sink_wrap = 1; }
     }
 }
+
+/* __GXFifoInit (GXInit calls it right after setting its register pointers): the pointers are
+   moved to plain memory first, so the library never reaches the emulated registers again. */
+void hle___GXFifoInit(ppc_context *ctx, uint8_t *base) {
+    W32(GX_REG_CP, GX_REG_SHADOW); W32(GX_REG_PE, GX_REG_SHADOW + 0x1000);
+    W32(GX_REG_PI, GX_REG_SHADOW + 0x3000); W32(GX_REG_MEM, GX_REG_SHADOW + 0x4000);
+    orig___GXFifoInit(ctx, base);
+    sink_on = sink_linked = 0;
+}
+/* GXSetCPUFifo(fifo): the library's bookkeeping, then the commands go to that buffer */
+void hle_GXSetCPUFifo(ppc_context *ctx, uint8_t *base) {
+    uint32_t f = ctx->r[3];
+    if (sink_linked) execute_pending();
+    orig_GXSetCPUFifo(ctx, base);
+    if (!f) { sink_on = sink_linked = 0; return; }
+    sink_base = R32(f + FO_BASE); sink_top = R32(f + FO_TOP); sink_wptr = R32(f + FO_WRPTR); sink_wrap = 0;
+    sink_on = 1; sink_linked = R8(GX_LINKED) != 0;
+}
+void hle_GXSetGPFifo(ppc_context *ctx, uint8_t *base) {
+    if (sink_linked) execute_pending();
+    orig_GXSetGPFifo(ctx, base);
+    sink_linked = sink_on && R8(GX_LINKED) != 0;
+}
+/* fn_801C32E0 (__GXSaveFifo): bring the FIFO objects' pointers up to date. Linked: everything
+   written was executed (read pointer = write pointer, nothing pending). */
+void hle_fn_801C32E0(ppc_context *ctx, uint8_t *base) {
+    (void)ctx; (void)base;
+    if (sink_linked) execute_pending();
+    int cpu = R8(GX_CPU_SET) != 0, gp = R8(GX_GP_SET) != 0, linked = R8(GX_LINKED) != 0;
+    if (cpu) { W32(GX_CPU_FIFO + FO_WRPTR, sink_wptr); W8(GX_CPU_FIFO + FO_WRAP, (uint8_t)sink_wrap); }
+    if (gp && linked) { W32(GX_GP_FIFO + FO_RDPTR, sink_wptr); W32(GX_GP_FIFO + FO_COUNT, 0); }
+    if (linked) {
+        W32(GX_CPU_FIFO + FO_RDPTR, R32(GX_GP_FIFO + FO_RDPTR)); W32(GX_CPU_FIFO + FO_COUNT, R32(GX_GP_FIFO + FO_COUNT));
+        W32(GX_GP_FIFO + FO_WRPTR, R32(GX_CPU_FIFO + FO_WRPTR)); W8(GX_GP_FIFO + FO_WRAP, R8(GX_CPU_FIFO + FO_WRAP));
+    } else if (cpu) {
+        int32_t n = (int32_t)(R32(GX_CPU_FIFO + FO_WRPTR) - R32(GX_CPU_FIFO + FO_RDPTR));
+        if (n < 0) n += (int32_t)R32(GX_CPU_FIFO + FO_SIZE);
+        W32(GX_CPU_FIFO + FO_COUNT, (uint32_t)n);
+    }
+}
+/* GXGetGPStatus(&overHi, &underLo, &readIdle, &cmdIdle, &breakpoint): the commands are done */
+void hle_GXGetGPStatus(ppc_context *ctx, uint8_t *base) {
+    (void)base;
+    if (sink_linked) execute_pending();
+    W32(R32(GX_DATA_PTR) + 0xC, 0x0E);
+    W8(ctx->r[3], 0); W8(ctx->r[4], 1); W8(ctx->r[5], 1); W8(ctx->r[6], 1); W8(ctx->r[7], 0);
+}
+/* the PE interrupt handlers acknowledge in the PE registers, which are plain memory now: the
+   interrupt is taken back here before the library's handler runs */
+void hle_GXTokenInterruptHandler(ppc_context *ctx, uint8_t *base) { pe_regs[0x0A / 2] &= ~4; pe_update_irq(); orig_GXTokenInterruptHandler(ctx, base); }
+void hle_GXFinishInterruptHandler(ppc_context *ctx, uint8_t *base) { pe_regs[0x0A / 2] &= ~8; pe_update_irq(); orig_GXFinishInterruptHandler(ctx, base); }
+/* GXAbortFrame (fn_801C4B70): reset the graphics pipe - here: drop what wasn't executed */
+void hle_fn_801C4B70(ppc_context *ctx, uint8_t *base) { (void)ctx; (void)base; fifo_len = 0; }
 
 void gx_init(void) {
     memset(&gx, 0, sizeof gx);

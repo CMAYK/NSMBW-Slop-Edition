@@ -9,12 +9,14 @@ BIG, SMALL, BYTE, SHORT, LONG, LONGLONG, BOOL = 1, 2, 3, 4, 5, 6, 7
 
 def bt_dinf():
     # conf_pads: u8 num_registered; pad registered[10]; pad active[4]; pad balance_board; u8 unk[0x45]
-    # pad = bdaddr (6, reversed) + name (64). One emulated remote, same address Dolphin uses.
+    # pad = bdaddr (6, reversed) + name (64). Four emulated remotes (runtime/rt_wiimote.c), the
+    # addresses Dolphin uses; registered and active in order, so remote i is WPAD channel i.
     d = bytearray(0x461)
-    pad = bytes([0x00, 0x00, 0x79, 0x19, 0x02, 0x11]) + b'Nintendo RVL-CNT-01'.ljust(0x40, b'\0')
-    d[0] = 1
-    d[1:1 + 0x46] = pad                       # registered[0]
-    d[1 + 10 * 0x46:1 + 11 * 0x46] = pad      # active[0]
+    d[0] = 4
+    for i in range(4):
+        pad = bytes([i, 0x00, 0x79, 0x19, 0x02, 0x11]) + b'Nintendo RVL-CNT-01'.ljust(0x40, b'\0')
+        d[1 + i * 0x46:1 + (i + 1) * 0x46] = pad                  # registered[i]
+        d[1 + (10 + i) * 0x46:1 + (11 + i) * 0x46] = pad          # active[i]
     return bytes(d)
 
 def sysconf(lang=1, widescreen=False):

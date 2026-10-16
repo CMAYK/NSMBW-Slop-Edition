@@ -1,17 +1,20 @@
-/* rt_mod.c - mkwcat's nsmbw-project module (8 players and more), built into the recompiled game.
+/* rt_mod.c - the 8-player module (8 players and more; THIRD_PARTY_NOTICES.md), built into the
+ * recompiled game while it is moved to native C (NATIVE_PORT.md).
  *
- * On a Wii the module is a REL that a small loader reads from mkwcat.arc, links into a heap block
+ * On a Wii the module is a REL that a small loader reads from its archive, links into a heap block
  * and starts from the boot scene; its _prolog then patches the game's code. Here all of that
  * linking and patching happened at build time (tools/link_mod.py, mod_patches.py, recomp.py), so
  * at runtime only the module's memory image is placed at its link address and its start-up code
  * is run at the moment the loader would have run it (the boot scene's step at 0x80328130, which
  * the Riivolution patch points at the loader instead of fn_8015BB20 "return true").
  *
- * The module's assets come from mkwcat.arc, added to the disc's file system by rt_disc.c.
+ * The module's assets come from its archive (MOD_ARC_NAME), added to the disc's file system by
+ * rt_disc.c.
  * Its settings are bytes at 0x80006784.. (alignment padding in .text) that Riivolution options
  * set; here they come from settings.ini. */
 #include "rt.h"
 #include "recomp_mod.h"
+RT_STATE_FILE                                   /* (this file's variables are part of a save state: rt_state.c) */
 
 int g_mod_on;                             /* switches the game's code to the patched version */
 #if MOD_PRESENT
@@ -29,30 +32,30 @@ static void *read_all(const char *path, size_t *len) {
 
 const char *mod_arc_path(void) {
     static char p[1200];
-    if (!p[0]) snprintf(p, sizeof p, "%s/mod/mkwcat-nsmbw.arc", g_root);
+    if (!p[0]) snprintf(p, sizeof p, "%s/mod/" MOD_ARC_NAME, g_root);
     return p;
 }
 
 static const struct { const char *key; uint32_t addr; int def; } mod_flags[] = {
-    { "mod_unlocked_all_worlds",     0x80006784u, 0 },
-    { "mod_completed_all_levels",    0x80006785u, 0 },
-    { "mod_no_powerup_pause",        0x80006786u, 0 },
-    { "mod_infinite_lives",          0x80006787u, 0 },
-    { "mod_death_messages",          0x80006788u, 0 },   /* 1 all damage, 2 deaths only */
-    { "mod_fall_damage",             0x80006789u, 0 },
-    { "mod_skip_opening_movie",      0x8000678Au, 0 },
-    { "mod_always_exit_course",      0x8000678Bu, 0 },
-    { "mod_shake_with_button",       0x8000678Cu, 0 },
-    { "mod_hide_motion_guides",      0x8000678Du, 1 },   /* 1 with 5+ players, 2 always */
-    { "mod_yoshi_colors",            0x8000678Eu, 0 },   /* 1 random, 2 all green */
-    { "mod_liftable_tiles",          0x8000678Fu, 0 },
-    { "mod_bubble_swarm",            0x80006794u, 0 },
-    { "mod_deadly_1up",              0x80006795u, 0 },
-    { "mod_all_paths_open",          0x80006796u, 0 },
+    { "unlock_all_worlds",           0x80006784u, 0 },
+    { "complete_all_levels",         0x80006785u, 0 },
+    { "no_powerup_pause",            0x80006786u, 0 },
+    { "infinite_lives",              0x80006787u, 0 },
+    { "death_messages",              0x80006788u, 0 },   /* 1 all damage, 2 deaths only */
+    { "fall_damage",                 0x80006789u, 0 },
+    { "skip_opening_movie",          0x8000678Au, 0 },
+    { "always_exit_course",          0x8000678Bu, 0 },
+    { "shake_with_button",           0x8000678Cu, 0 },
+    { "hide_motion_guides",          0x8000678Du, 1 },   /* 1 with 5+ players, 2 always */
+    { "yoshi_colors",                0x8000678Eu, 0 },   /* 1 random, 2 all green */
+    { "liftable_tiles",              0x8000678Fu, 0 },
+    { "bubble_swarm",                0x80006794u, 0 },
+    { "deadly_1up",                  0x80006795u, 0 },
+    { "all_paths_open",              0x80006796u, 0 },
 };
 
 
-/* ---- save data: the module keeps saves as JSON (mkwcat-nsmbw.json, bigger structures for 8
+/* ---- save data: the module keeps saves as JSON (nsmbw-save.json, bigger structures for 8
    players) instead of wiimj2d.sav. The first time, the original save is converted so progress
    carries over (same format the module writes: d_mj2d_json_handler.cpp). The original file is
    left untouched. */
@@ -120,8 +123,8 @@ static void conv_game(FILE *o, const uint8_t *g, const char *key) {
 
 static void convert_save(void) {
     char dir[1200], src[1300], dst[1300];
-    snprintf(dir, sizeof dir, "%s/nand/title/00010000/534d4e45/data", g_root);
-    snprintf(dst, sizeof dst, "%s/mkwcat-nsmbw.json", dir);
+    snprintf(dir, sizeof dir, "%s/title/00010000/534d4e45/data", rt_nand_root());
+    snprintf(dst, sizeof dst, "%s/nsmbw-save.json", dir);
     FILE *t = fopen(dst, "rb"); if (t) { fclose(t); return; }
     snprintf(src, sizeof src, "%s/wiimj2d.sav", dir);
     size_t n; uint8_t *d = read_all(src, &n);
@@ -150,7 +153,7 @@ static void convert_save(void) {
     }
     fprintf(o, "}");
     fclose(o); free(d);
-    rt_log("mod", "converted wiimj2d.sav (%d files) to mkwcat-nsmbw.json", files);
+    rt_log("save", "converted wiimj2d.sav (%d files) to nsmbw-save.json", files);
 }
 
 /* place the linked image (load_dol has already put the game in memory) */
@@ -187,17 +190,17 @@ static void mod_start(ppc_context *ctx, uint8_t *base) {
     W32(MOD_CODE_REGION_VAR, gcall(ctx, base, MOD_FIND_CODE_REGION, 0, 0));
     /* the archive handle the loader leaves for the module's DVD extension */
     const uint32_t name = MOD_SCRATCH, handle = MOD_SCRATCH + 0x20, hdr = MOD_SCRATCH + 0x100;
-    memcpy(G(name), "mkwcat.arc", 11);
+    memcpy(G(name), MOD_ARC_NAME, sizeof MOD_ARC_NAME);
     int32_t entry = (int32_t)gcall(ctx, base, A_DVDConvertPathToEntrynum, name, 0);
-    if (entry < 0) rt_fatal("mkwcat.arc is not in the disc file system");
+    if (entry < 0) rt_fatal(MOD_ARC_NAME " is not in the disc file system");
     size_t n; uint8_t *arc = read_all(mod_arc_path(), &n);
     if (!arc || n < 0x20) rt_fatal("cannot read %s", mod_arc_path());
     uint32_t file_start = ((uint32_t)arc[12] << 24 | arc[13] << 16 | arc[14] << 8 | arc[15]);
     uint32_t hsize = (file_start + 31) & ~31u;
-    if (hsize > 0x10000 - 0x100 || hsize > n) rt_fatal("mkwcat.arc header too large (%u)", hsize);
+    if (hsize > 0x10000 - 0x100 || hsize > n) rt_fatal(MOD_ARC_NAME " header too large (%u)", hsize);
     memcpy(G(hdr), arc, hsize); free(arc);
-    if (!gcall(ctx, base, A_ARCInitHandle, hdr, handle)) rt_fatal("ARCInitHandle failed for mkwcat.arc");
-    rt_log("mod", "mkwcat.arc: entry %d, header %u bytes", entry, hsize);
+    if (!gcall(ctx, base, A_ARCInitHandle, hdr, handle)) rt_fatal("ARCInitHandle failed for " MOD_ARC_NAME);
+    rt_log("mod", MOD_ARC_NAME ": entry %d, header %u bytes", entry, hsize);
     if (gcall(ctx, base, MOD_PREINIT, (uint32_t)entry, handle) != 0) rt_fatal("module preinit failed");
     for (unsigned i = 0; i < sizeof mod_ctors / sizeof *mod_ctors; i++) gcall(ctx, base, mod_ctors[i], 0, 0);
     if (gcall(ctx, base, MOD_MAIN, 0, 0) != 0) rt_fatal("module main failed");

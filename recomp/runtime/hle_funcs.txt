@@ -39,8 +39,6 @@ DCFlushRangeNoSync
 DCStoreRangeNoSync
 _Z22BgTexMng__LoadAnimTilePvisPcS0_c
 startSystemSe__11SndAudioMgrFUiUl
-fn_2_3F000
-isAnimOn__Q23m2d13EmbedLayout_cFi
 startGame__7dInfo_cFRCQ27dInfo_c15StartGameInfo_s
 getPlayer__9daPyMng_cFi
 GXSetTexCopySrc
@@ -49,7 +47,109 @@ StartBGMMusic
 StopBGMMusic
 setMainBgmNo__6dAudioFi
 setBgmMode__6dAudioFi
-fn_8019BA20
 fn_8019CC70
 read__10dGameKey_cFv
 fn_8015BB20
+# game setup scene (rt_gamesetup.c): dScGameSetup_c, native
+mod_fn_2_1AA4E0
+mod_fn_2_1AA710
+mod_fn_2_1AAFE0
+mod_fn_2_1AB140
+fn_2_1AB1B0
+fn_2_1AB280
+mod_fn_2_1AB360
+mod_fn_2_1AB470
+fn_2_1AB570
+mod_fn_2_1AB620
+mod_fn_2_1AB6D0
+mod_fn_2_1AB9F0
+# character select (dNumberOfPeopleChange_c), in part
+mod_fn_2_33DA0
+mod_fn_2_345C0
+# title screen (rt_title.c): dEventOpeningTitle_c, native
+mod_fn_2_144E0
+mod_fn_2_14BD0
+StartAnimOrig
+mod_fn_2_1B2680
+# retro characters (rt_retro.c): SMB1 movement and sprite drawing for an NSMBW player
+fn_801438A0
+fn_80056E40
+fn_80145A60
+dAcPy_vf3FC
+fn_801285D0
+fn_801266B0
+fn_8005E780
+# character list (rt_chars.c): the character select walks the whole roster; portraits
+mod_fn_2_3170
+mod_fn_2_2600
+mod_fn_2_2510
+mod_fn_2_2770
+mod_fn_2_26F0
+mod_fn_2_26D0
+mod_fn_2_E90
+mod_fn_2_1290
+mod_fn_2_5AB0
+# retro characters make no particles (rt_retro.c)
+createPlayerEffect__3dEfFiPCcUlPC7mVec3_cPC7mAng3_cPC7mVec3_c
+createPlayerEffect__3dEfFiPQ23mEf13levelEffect_cPCcUlPC7mVec3_cPC7mAng3_cPC7mVec3_c
+createPlayerEffect__3dEfFiPQ23dEf14followEffect_cPCcUlPC7mVec3_cPC7mAng3_cPC7mVec3_c
+createPlayerEffect_change__3dEfFiPCcUlPC7mVec3_cPC7mAng3_cPC7mVec3_c
+createPlayerEffect_change__3dEfFiPQ23mEf13levelEffect_cPCcUlPC7mVec3_cPC7mAng3_cPC7mVec3_c
+createPlayerEffect_change__3dEfFiPQ23dEf14followEffect_cPCcUlPC7mVec3_cPC7mAng3_cPC7mVec3_c
+# singleplayer: lives / power-up follow the save file (rt_chars.c)
+mod_fn_800E1690
+# character models from mods (rt_charmdl.c)
+mod_fn_800D6D10
+fn_800D32F0
+mod_fn_800BCEE0
+draw__11dPyMdlMng_cFv
+__dt__11dPyMdlMng_cFv
+mod_fn_2_343F0
+fn_2_2DF0
+SITransfer
+# SMB1 Mario (rt_retro.c): no slope slide / small crouch / lift-up / Yoshi; no carrying; the goal pole
+fn_80047430
+fn_8014eb70__9daYoshi_cFP7dAcPy_ci
+fn_8012E400
+fn_8013FCE0
+# SMB1 Mario makes no particles (all effects made during its update)
+createEffect__3mEfFPCcUlPC7mVec3_cPC7mAng3_cPC7mVec3_c
+createEffect__Q23mEf8effect_cFPCci
+createEffect__Q23mEf8effect_cFPCcUlPC7mVec3_cPC7mAng3_cPC7mVec3_c
+createEffect__Q23mEf8effect_cFPCcUlPC6mMtx_c
+createEffect__Q23mEf13levelEffect_cFPCci
+createEffect__Q23mEf13levelEffect_cFPCcUlPC7mVec3_cPC7mAng3_cPC7mVec3_c
+createEffect__Q23mEf13levelEffect_cFPCcUlPC6mMtx_c
+# SMB1 Mario's sounds replace NSMBW's for what it does
+detail_StartSound__Q34nw4r3snd14SoundStartableFPQ34nw4r3snd11SoundHandleUlPCQ44nw4r3snd14SoundStartable9StartInfo
+detail_HoldSound__Q34nw4r3snd14SoundStartableFPQ34nw4r3snd11SoundHandleUlPCQ44nw4r3snd14SoundStartable9StartInfo
+startMissBGM__9daPyMng_cFi
+create__Q23EGG6EffectFv
+# track A1 (docs/NATIVE_ROADMAP.md): the GX FIFO without emulated hardware (rt_gx.c)
+__GXFifoInit
+GXSetCPUFifo
+GXSetGPFifo
+fn_801C32E0
+GXGetGPStatus
+fn_801C4B70
+GXTokenInterruptHandler
+GXFinishInterruptHandler
+# track A3: the disc without /dev/di for reads (rt_dvd.c)
+fn_801CECC0
+_Z11DVDReadPrioP9DVDHandlePviii
+DVDCancel
+# track A: the IOS client without the IPC hardware (rt_ios.c)
+IOS_Open
+IOS_OpenAsync
+IOS_Close
+IOS_CloseAsync
+IOS_Read
+IOS_ReadAsync
+IOS_Write
+IOS_WriteAsync
+IOS_Seek
+IOS_SeekAsync
+fn_80225640
+IOS_IoctlAsync
+IOS_Ioctlv
+IOS_IoctlvAsync

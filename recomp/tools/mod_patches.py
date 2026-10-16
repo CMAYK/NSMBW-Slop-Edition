@@ -69,7 +69,7 @@ def main():
         if cur != old & ((1 << 8 * size) - 1): bad += 1; print(f'four: {addr:08X} expected {old} found {cur}')
         four.append((addr, size, new & ((1 << 8 * size) - 1)))
     out['four'] = four
-    # Riivolution memory patches from mkwcat-nsmbw.xml (US addresses), except the loader hook
+    # the module release's Riivolution memory patches (riivolution/*.xml, US addresses), except the loader hook
     out['memory'] = [(0x8015BDF4, 0x60000000, 0x981F0102),   # wait for the module loader
                      (0x800B6490, 0x3C800012, 0x3C800010),   # expand layout heap
                      (0x800E4D70, 0x38600000, 0x3863300C)]   # disable exception handler input sequence

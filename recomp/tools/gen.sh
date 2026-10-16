@@ -3,7 +3,7 @@
 # none of the inputs changed since the last run.
 set -e
 cd "$(dirname "$0")/.."
-[ -f mod/d_project.rel ] || python3 tools/fetch_mod.py
+[ -f mod/d_project.rel ] && [ -f mod/nsmbw-8p.arc ] || python3 tools/fetch_mod.py
 mkdir -p out
 stamp=$(cat tools/recomp.py tools/link_mod.py tools/mod_patches.py tools/mod_funcs.py runtime/hle_funcs.txt \
         orig/main.dol linked/manifest.json linked/*NP.bin mod/d_project.rel mod/d_project_E2.imp config/symbols.txt config/d_*NP/symbols.txt 2>/dev/null | md5sum | cut -c1-32)

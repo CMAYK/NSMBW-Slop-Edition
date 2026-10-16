@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 #include "rt.h"
 #include <ucontext.h>
+#include <time.h>
 #include <dlfcn.h>
 #include <sys/mman.h>
 #include <signal.h>
@@ -10,26 +11,7 @@
 #include <sys/time.h>
 #include <ucontext.h>
 
-struct rt_fiber { ucontext_t uc; void (*fn)(void *); void *arg; };
-static rt_fiber main_fiber;
-
-rt_fiber *plat_fiber_main(void) { return &main_fiber; }
-static void trampoline(unsigned hi, unsigned lo) {
-    rt_fiber *f = (rt_fiber *)(((uintptr_t)hi << 32) | lo);
-    f->fn(f->arg);
-}
-rt_fiber *plat_fiber_create(void (*fn)(void *), void *arg) {
-    rt_fiber *f = calloc(1, sizeof *f);
-    size_t sz = 16u << 20;
-    void *stack = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    getcontext(&f->uc);
-    f->uc.uc_stack.ss_sp = stack; f->uc.uc_stack.ss_size = sz; f->uc.uc_link = NULL;
-    f->fn = fn; f->arg = arg;
-    uintptr_t p = (uintptr_t)f;
-    makecontext(&f->uc, (void (*)(void))trampoline, 2, (unsigned)(p >> 32), (unsigned)p);
-    return f;
-}
-void plat_fiber_switch(rt_fiber *from, rt_fiber *to) { swapcontext(&from->uc, &to->uc); }
+/* (guest thread fibers: rt_state.c) */
 
 extern uint64_t g_vi_fields, g_gx_draws, g_gx_cmds;
 static uint64_t rt_prof_buf[1 << 20]; static volatile int prof_n;
@@ -117,6 +99,7 @@ void plat_present(const uint32_t *rgba, int w, int h) {
     const char *every = getenv("RT_DUMP_EVERY");
     int n = every ? atoi(every) : 60;
     if (n <= 0 || frame_no % n) return;
+    { const char *from = getenv("RT_DUMP_FROM"); if (from && frame_no < atoi(from)) return; }   /* first frame to dump */
     const char *dd = getenv("RT_DUMP_DIR"); char p[1200];
     if (dd) snprintf(p, sizeof p, "%s/frame_%05d.ppm", dd, frame_no); else snprintf(p, sizeof p, "%s/frames/frame_%05d.ppm", g_root, frame_no);
     FILE *f = fopen(p, "wb"); if (!f) return;
@@ -127,12 +110,17 @@ void plat_present(const uint32_t *rgba, int w, int h) {
 int plat_pump(void) { return 1; }
 int plat_gl_present_begin(int *x, int *y, int *w, int *h, int *cw, int *ch) { (void)x; (void)y; (void)w; (void)h; (void)cw; (void)ch; return 0; }
 void plat_gl_present_end(void) {}
+void plat_idle_wait(uint64_t ns) { struct timespec t = {0, (long)ns}; nanosleep(&t, NULL); }
 /* RT_AUTOPRESS="sec:mask[:ms],..." presses buttons at given wall-clock seconds after start (testing) */
 uint32_t plat_buttons(void) {
     static uint64_t t0; static const char *spec; static int init;
+    { extern void chars_test_frame(void); chars_test_frame(); }   /* rt_chars.c: RT_SELECT_SCRIPT */
+    extern uint32_t g_retro_test_buttons;                 /* rt_retro.c: RT_RETRO_SCRIPT */
     if (!init) { init = 1; t0 = rt_now_ns(); spec = getenv("RT_AUTOPRESS"); }
-    if (!spec) return 0;
+    if (!spec) return g_retro_test_buttons;
     double t = (double)(rt_now_ns() - t0) / 1e9;
+    { extern uint64_t g_frames_presented; static int fr = -1; if (fr < 0) fr = getenv("RT_AUTOPRESS_FRAMES") != NULL;
+      if (fr) t = (double)g_frames_presented / 60.0; }   /* RT_AUTOPRESS_FRAMES=1: seconds of game frames (renderer speed doesn't matter) */
     uint32_t b = 0; const char *p = spec;
     while (*p) {
         double at = strtod(p, (char **)&p); if (*p != ':') break; p++;
@@ -141,7 +129,7 @@ uint32_t plat_buttons(void) {
         if (t >= at && t < at + dur) b |= m;
         if (*p == ',') p++; else break;
     }
-    return b;
+    return b | g_retro_test_buttons;
 }
 
 /* ------------------------------------------------------------------ OpenGL context (EGL, headless)
@@ -180,11 +168,114 @@ void plat_audio_push(const int16_t *lr, int frames) {
     fseek(f, 4, SEEK_SET); fwrite(&riff, 4, 1, f); fseek(f, 40, SEEK_SET); fwrite(&total, 4, 1, f); fseek(f, here, SEEK_SET);
 }
 
-/* real Wii Remote passthrough: not implemented on Linux yet */
-int plat_wiimote_present(void) { return 0; }
-void plat_wiimote_write(const uint8_t *r, int len) { (void)r; (void)len; }
-int plat_wiimote_read(uint8_t *r, int max) { (void)r; (void)max; return 0; }
+/* real Wii Remotes: none on Linux - but for tests, RT_FAKE_WM="n" connects n pretend remotes
+   (addresses AABBCC00000i) that answer like real ones (status, memory reads, acks, reporting
+   modes), with buttons from RT_FAKE_WM_SCRIPT="remote:frame:buttons hex:frames,..." (remote
+   0-7; buttons in report order: 0x0100 2, 0x0200 1, 0x0800 A, 0x0010 +, 0x0008 up...) and
+   RT_FAKE_WM_GONE="remote:frame,..." taking one away. Their LED reports are logged. */
+#define FWM 8
+static struct { int on; uint8_t mode, cont, leds; uint8_t q[64][23]; int qn[64], nq; uint64_t last_frame; uint16_t last_btn; } fwm[FWM];
+static int fwm_n = -1;
+static void fwm_push(int i, const uint8_t *r, int n) { if (fwm[i].nq < 64) { memcpy(fwm[i].q[fwm[i].nq], r, n); fwm[i].qn[fwm[i].nq++] = n; } }
+static uint16_t fwm_buttons(int i) {
+    const char *sp = getenv("RT_FAKE_WM_SCRIPT"); if (!sp) return 0;
+    uint16_t b = 0; const char *p = sp;
+    while (*p) {
+        long who = strtol(p, (char **)&p, 10); if (*p != ':') break; p++;
+        long at = strtol(p, (char **)&p, 10); if (*p != ':') break; p++;
+        uint32_t m = (uint32_t)strtoul(p, (char **)&p, 16); long dur = 10;
+        if (*p == ':') { p++; dur = strtol(p, (char **)&p, 10); }
+        if (who == i && (long)g_frames_presented >= at && (long)g_frames_presented < at + dur) b |= (uint16_t)m;
+        if (*p == ',') p++; else break;
+    }
+    return b;
+}
+static void fwm_init(void) {
+    if (fwm_n >= 0) return;
+    const char *e = getenv("RT_FAKE_WM"); fwm_n = e ? atoi(e) : 0; if (fwm_n > FWM) fwm_n = FWM;
+    for (int i = 0; i < fwm_n; i++) { fwm[i].on = 1; fwm[i].mode = 0x30; }
+}
+int plat_wm_list(plat_wm_dev *out, int max) {
+    fwm_init();
+    const char *gone = getenv("RT_FAKE_WM_GONE");
+    for (const char *p = gone; p && *p; ) {
+        long who = strtol(p, (char **)&p, 10); if (*p != ':') break; p++;
+        long at = strtol(p, (char **)&p, 10);
+        if (who >= 0 && who < fwm_n && (long)g_frames_presented >= at && fwm[who].on) { fwm[who].on = 0; rt_log("fakewm", "remote %ld goes away", who); }
+        if (*p == ',') p++; else break;
+    }
+    int n = 0;
+    for (int i = 0; i < fwm_n && n < max; i++) if (fwm[i].on) { out[n].id = 100 + i; out[n].addr = 0xAABBCC000000ull + (uint64_t)i; n++; }
+    return n;
+}
+void plat_wm_write(int id, const uint8_t *r, int len) {
+    int i = id - 100; if (i < 0 || i >= fwm_n || !fwm[i].on || len < 2) return;
+    uint16_t b = fwm_buttons(i); uint8_t b1 = b & 0x1F, b2 = (b >> 8) & 0x9F;
+    int ack = r[1] & 0x02;
+    switch (r[0]) {
+    case 0x11: if (fwm[i].leds != (r[1] >> 4)) rt_log("fakewm", "remote %d lights %c%c%c%c", i, r[1] & 0x10 ? '1' : '0', r[1] & 0x20 ? '1' : '0', r[1] & 0x40 ? '1' : '0', r[1] & 0x80 ? '1' : '0');
+        fwm[i].leds = r[1] >> 4; break;
+    case 0x12: fwm[i].cont = (r[1] & 4) != 0; fwm[i].mode = len > 2 ? r[2] : 0x30; break;
+    case 0x15: { uint8_t q[7] = {0x20, b1, b2, (uint8_t)(fwm[i].leds << 4), 0, 0, 0xC0}; fwm_push(i, q, 7); return; }
+    case 0x16: { uint8_t q[5] = {0x22, b1, b2, 0x16, 0}; fwm_push(i, q, 5); return; }
+    case 0x17: {
+        int left = (r[5] << 8) | r[6]; uint32_t addr = (r[2] << 16) | (r[3] << 8) | r[4];
+        int reg = (r[1] & 4) != 0, err = reg && ((addr >> 16) & 0xFE) == 0xA4 ? 7 : 0;
+        while (left > 0) { int k = left > 16 ? 16 : left; uint8_t q[22] = {0x21, b1, b2, (uint8_t)(((k - 1) << 4) | err), (uint8_t)(addr >> 8), (uint8_t)addr};
+            if (!reg && addr < 0x30) { static const uint8_t cal[0x30] = {0x66,0x6E,0x77,0xB8,0x83,0x71,0x89,0x88,0x30,0,0,0x66,0x6E,0x77,0xB8,0x83,0x71,0x89,0x88,0x30,0,0,0x80,0x80,0x80,0,0x9A,0x9A,0x9A,0,0x40,0xE3,0x80,0x80,0x80,0,0x9A,0x9A,0x9A,0,0x40,0xE3};
+                for (int j = 0; j < k && addr + j < 0x30; j++) q[6 + j] = cal[addr + j]; }
+            fwm_push(i, q, 22); if (err) break; addr += k; left -= k; }
+        return;
+    }
+    }
+    if (ack) { uint8_t q[5] = {0x22, b1, b2, r[0], 0}; fwm_push(i, q, 5); }
+    if (r[0] == 0x12) fwm[i].last_btn = 0xFFFF;                 /* report in the new mode */
+}
+int plat_wm_read(int id, uint8_t *r, int max) {
+    int i = id - 100; if (i < 0 || i >= fwm_n || !fwm[i].on) return 0;
+    if (!fwm[i].nq) {                                           /* a data report when buttons change / continuous */
+        uint16_t b = fwm_buttons(i);
+        if (b != fwm[i].last_btn || (fwm[i].cont && g_frames_presented != fwm[i].last_frame)) {
+            uint8_t q[22]; memset(q, 0, sizeof q); q[0] = fwm[i].mode; q[1] = b & 0x1F; q[2] = (b >> 8) & 0x9F;
+            int n = fwm[i].mode == 0x30 ? 3 : fwm[i].mode == 0x31 ? 6 : fwm[i].mode == 0x33 ? 18 : 22;
+            if (n > 3) { q[3] = 0x80; q[4] = 0x80; q[5] = 0x9A; }
+            if (n > 6) memset(q + 6, 0xFF, n - 6);
+            fwm_push(i, q, n); fwm[i].last_btn = b; fwm[i].last_frame = g_frames_presented;
+        }
+    }
+    if (!fwm[i].nq) return 0;
+    int n = fwm[i].qn[0] < max ? fwm[i].qn[0] : max; memcpy(r, fwm[i].q[0], n);
+    memmove(fwm[i].q, fwm[i].q + 1, sizeof fwm[i].q[0] * (fwm[i].nq - 1)); memmove(fwm[i].qn, fwm[i].qn + 1, sizeof fwm[i].qn[0] * (fwm[i].nq - 1)); fwm[i].nq--;
+    return n;
+}
+int plat_wm_pair_supported(void) { return 0; }
+void plat_wm_pair(int on) { (void)on; }
+int plat_wm_pair_state(char *msg, int n) { if (msg && n) snprintf(msg, n, "Pairing isn't available here"); return -1; }
+int plat_wm_forget(uint64_t addr) { (void)addr; return 0; }
+/* RT_FAKE_WM_PAIRED="frame:remote,...": pretend that fake remote was just paired then */
+uint64_t plat_wm_pair_last(unsigned *gen) {
+    static const char *spec; static int init; static unsigned g; static uint64_t last;
+    if (!init) { init = 1; spec = getenv("RT_FAKE_WM_PAIRED"); }
+    for (const char *p = spec; p && *p; ) {
+        long at = strtol(p, (char **)&p, 10); if (*p != ':') break; p++;
+        long r = strtol(p, (char **)&p, 10);
+        if ((long)g_frames_presented >= at && (unsigned)(r + 1) > g) { g = (unsigned)(r + 1); last = 0xAABBCC000000ull + (uint64_t)r; }
+        if (*p == ',') p++; else break;
+    }
+    *gen = g; return last;
+}
 void plat_set_fullscreen(int on) { (void)on; }
 int plat_get_fullscreen(void) { return 0; }
 void plat_set_window(int w, int h, int fixed) { (void)w; (void)h; (void)fixed; }
+void plat_title_note(const char *note) { static char last[120]; if (note && strcmp(last, note)) { snprintf(last, sizeof last, "%s", note); rt_log("title", "%s", note); } else if (!note) last[0] = 0; }
 void plat_restart(void) { rt_log("linux", "restart requested"); exit(0); }
+
+/* typed characters (the Online screen's address): none here; tests use RT_NET_JOIN */
+/* RT_TYPE="sec:text" (testing): typed on the keyboard from that many seconds of game frames on; '|' = Enter */
+int plat_text_char(void) {
+    static const char *p; static double at = -1;
+    if (at < 0) { const char *e = getenv("RT_TYPE"); at = 1e9; if (e && strchr(e, ':')) { at = atof(e); p = strchr(e, ':') + 1; } }
+    extern uint64_t g_frames_presented;
+    if (!p || !*p || (double)g_frames_presented / 60.0 < at) return 0;
+    char c = *p++; return c == '|' ? 13 : (unsigned char)c;
+}

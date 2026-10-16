@@ -12,6 +12,7 @@
 #else
 #define MKDIR(p) mkdir(p, 0755)
 #include <unistd.h>
+RT_STATE_FILE                                   /* (this file's variables are part of a save state: rt_state.c) */
 #define RMDIR(p) rmdir(p)
 #endif
 
@@ -48,7 +49,9 @@ void ios_update(void) { bt_update(); update_ipc(); update_irq(); }
 
 void ios_reply(uint32_t req, int32_t result);
 static void reply(uint32_t req, int32_t result) { ios_reply(req, result); }
+static int native_reply(uint32_t req, int32_t result);
 void ios_reply(uint32_t req, int32_t result) {
+    if (native_reply(req, result)) return;                   /* a request from the native IOS client (below) */
     uint32_t cmd = R32(req);
     W32(req + 4, (uint32_t)result);
     W32(req + 8, cmd);
@@ -92,11 +95,30 @@ void ios_mmio_write(uint32_t reg, uint32_t v) {
 
 /* ------------------------------------------------------------------ devices */
 enum { DEV_NONE, DEV_DI, DEV_FS, DEV_ES, DEV_STM_IMM, DEV_STM_EVENT, DEV_FILE, DEV_STUB, DEV_BT };
-typedef struct { int type; FILE *fp; char path[600]; uint32_t pos; int mode; } fdent;
+typedef struct { int type; int has_fp; uint32_t oid; char path[600]; uint32_t pos; int mode; } fdent;
 static fdent fds[32];
+/* The open files' host handles are this process's own (a save state from another PC has the
+   same descriptors but not our FILE*s): each open file gets an id, and the handle is (re)opened
+   here when the id it was opened for isn't the descriptor's (rt_state.c loads). */
+static FILE *lfp[32] RT_LOCAL; static uint32_t lfp_oid[32] RT_LOCAL;
+static uint32_t next_oid;
+static void nand_host_path(const char *nand, char *out, size_t n);
+static FILE *efp(fdent *e) {
+    int i = (int)(e - fds);
+    if (e->type != DEV_FILE || !e->has_fp) return NULL;
+    if (lfp[i] && lfp_oid[i] == e->oid) return lfp[i];
+    if (lfp[i]) { fclose(lfp[i]); lfp[i] = NULL; }
+    char hp[700]; nand_host_path(e->path, hp, sizeof hp);
+    lfp[i] = fopen(hp, (e->mode & 2) ? "r+b" : "rb"); lfp_oid[i] = e->oid;
+    return lfp[i];
+}
+static void eclose(fdent *e) { int i = (int)(e - fds); if (lfp[i]) { fclose(lfp[i]); lfp[i] = NULL; } e->has_fp = 0; }
+void ios_state_loaded(void) { for (int i = 0; i < 32; i++) if (lfp[i]) { fclose(lfp[i]); lfp[i] = NULL; } }
 
+/* NAND paths live under nand/ on the host. (The save file is nsmbw-save.json: the module's
+   save names are replaced when it is linked, tools/link_mod.py.) */
 static void nand_host_path(const char *nand, char *out, size_t n) {
-    snprintf(out, n, "%s/nand%s", g_root, nand);
+    snprintf(out, n, "%s%s", rt_nand_root(), nand);
 }
 static void mkdirs_for(const char *path) {
     char tmp[700]; snprintf(tmp, sizeof tmp, "%s", path);
@@ -133,9 +155,8 @@ static int list_dir(const char *hp, char *names, size_t cap, int max) {
 static void release_handles(const char *nand) {
     size_t n = strlen(nand);
     for (int i = 0; i < 32; i++)
-        if (fds[i].type == DEV_FILE && fds[i].fp && !strncmp(fds[i].path, nand, n) && (fds[i].path[n] == 0 || fds[i].path[n] == '/')) {
-            fclose(fds[i].fp); fds[i].fp = NULL;
-        }
+        if (fds[i].type == DEV_FILE && fds[i].has_fp && !strncmp(fds[i].path, nand, n) && (fds[i].path[n] == 0 || fds[i].path[n] == '/'))
+            eclose(&fds[i]);
 }
 static int32_t dev_open(const char *path, int mode) {
     int fd = -1;
@@ -155,9 +176,8 @@ static int32_t dev_open(const char *path, int mode) {
     } else {
         char hp[700]; nand_host_path(path, hp, sizeof hp);
         if (!file_exists(hp)) { LOG("ios", "open NAND %s -> ENOENT", path); return FS_ENOENT; }
-        e->fp = fopen(hp, (mode & 2) ? "r+b" : "rb");
-        if (!e->fp) return FS_ENOENT;
-        e->type = DEV_FILE;
+        e->type = DEV_FILE; e->has_fp = 1; e->oid = ++next_oid;
+        if (!efp(e)) { memset(e, 0, sizeof *e); return FS_ENOENT; }
     }
     LOG("ios", "open %s mode %d -> fd %d", path, mode, fd);
     return fd;
@@ -249,24 +269,25 @@ static void execute(uint32_t req) {
     switch (cmd) {
     case IPC_OPEN: res = dev_open((const char *)G(R32(req + 12)), (int)R32(req + 16)); break;
     case IPC_CLOSE:
-        if (e && e->type) { if (e->fp) fclose(e->fp); memset(e, 0, sizeof *e); res = 0; }
+        if (e && e->type) { eclose(e); memset(e, 0, sizeof *e); res = 0; }
         break;
     case IPC_READ: case IPC_WRITE: {
         uint32_t buf = R32(req + 12), len = R32(req + 16);
-        if (e && e->type == DEV_FILE && !e->fp) res = -101;           /* file was deleted/replaced */
+        FILE *fp = e ? efp(e) : NULL;
+        if (e && e->type == DEV_FILE && !fp) res = -101;              /* file was deleted/replaced */
         else if (e && e->type == DEV_FILE) {
-            fseek(e->fp, e->pos, SEEK_SET);
-            size_t n = cmd == IPC_READ ? fread(G(buf), 1, len, e->fp) : fwrite(G(buf), 1, len, e->fp);
+            fseek(fp, e->pos, SEEK_SET);
+            size_t n = cmd == IPC_READ ? rt_fread_guest(G(buf), len, fp) : fwrite(G(buf), 1, len, fp);
             LOG("ios", "%s %s pos %u len %u -> %u", cmd == IPC_READ ? "read" : "write", e->path, e->pos, len, (unsigned)n);
             e->pos += (uint32_t)n; res = (int32_t)n;
-            if (cmd == IPC_WRITE) fflush(e->fp);
+            if (cmd == IPC_WRITE) fflush(fp);
         } else res = IOS_EINVAL;
         break;
     }
     case IPC_SEEK:
-        if (e && e->type == DEV_FILE && e->fp) {
+        if (e && e->type == DEV_FILE && efp(e)) {
             int32_t off = (int32_t)R32(req + 12); uint32_t whence = R32(req + 16);
-            fseek(e->fp, 0, SEEK_END); long size = ftell(e->fp);
+            fseek(efp(e), 0, SEEK_END); long size = ftell(efp(e));
             int64_t np = whence == 0 ? off : whence == 1 ? (int64_t)e->pos + off : size + off;
             if (np < 0 || np > size) res = -101; else { e->pos = (uint32_t)np; res = (int32_t)np; }
         }
@@ -277,8 +298,8 @@ static void execute(uint32_t req) {
         if (e->type == DEV_DI) res = di_ioctl(ioc, in, in_len, out, out_len, req, &pending);
         else if (e->type == DEV_FS) res = fs_ioctl(ioc, in, out, out_len);
         else if (e->type == DEV_STM_EVENT) pending = 1;                     /* power/reset events: never */
-        else if (e->type == DEV_FILE && ioc == 11 && e->fp) {                        /* GetFileStats */
-            fseek(e->fp, 0, SEEK_END); W32(out, (uint32_t)ftell(e->fp)); W32(out + 4, e->pos); res = 0;
+        else if (e->type == DEV_FILE && ioc == 11 && efp(e)) {                       /* GetFileStats */
+            fseek(efp(e), 0, SEEK_END); W32(out, (uint32_t)ftell(efp(e))); W32(out + 4, e->pos); res = 0;
         } else { LOG("ios", "ioctl %08X on %s (ok)", ioc, e->path); res = 0; }
         break;
     }
@@ -323,8 +344,96 @@ static void execute(uint32_t req) {
     if (!pending) reply(req, res);
 }
 
+
+/* ------------------------------------------------------------------ the IOS client, native (track A)
+ * The SDK's IOS client (IOS_Open / IOS_Read / IOS_Ioctl / IOS_Ioctlv and their Async forms)
+ * normally hands each request to Starlet through the IPC registers and finishes it from the IPC
+ * interrupt. Here those functions are native: the request goes straight to the devices above
+ * (execute()), a synchronous call returns the result, an asynchronous one gets its callback
+ * "from an interrupt" (rt_post_callback) - at once if the device answered, or when it does
+ * (Bluetooth, cover/STM events). No IPC registers, no IPC interrupt. docs/NATIVE_ROADMAP.md */
+#define NREQ_BASE  0x82010000u                  /* request blocks in guest memory (the devices read them there) */
+#define NREQ_COUNT 128
+#define NREQ_SIZE  0x40
+static struct { int used, async, done; uint32_t cb, arg; int32_t result; } nreq_s[NREQ_COUNT];
+uint64_t g_ios_native_calls RT_LOCAL;
+static int native_reply(uint32_t req, int32_t result) {
+    if (req < NREQ_BASE || req >= NREQ_BASE + NREQ_COUNT * NREQ_SIZE) return 0;
+    int i = (int)((req - NREQ_BASE) / NREQ_SIZE);
+    W32(req + 4, (uint32_t)result);
+    nreq_s[i].result = result; nreq_s[i].done = 1;
+    if (nreq_s[i].async) { if (nreq_s[i].cb) rt_post_callback(nreq_s[i].cb, (uint32_t)result, nreq_s[i].arg); nreq_s[i].used = 0; }
+    return 1;
+}
+static int32_t ios_native(int async, uint32_t cmd, uint32_t fd, uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t cb, uint32_t arg) {
+    int i; for (i = 0; i < NREQ_COUNT && nreq_s[i].used; i++) {}
+    if (i == NREQ_COUNT) { rt_log("ios", "native IOS: out of request blocks"); return -22; }
+    uint32_t req = NREQ_BASE + (uint32_t)i * NREQ_SIZE;
+    memset(G(req), 0, NREQ_SIZE);
+    W32(req, cmd); W32(req + 8, fd); W32(req + 12, a0); W32(req + 16, a1); W32(req + 20, a2); W32(req + 24, a3); W32(req + 28, a4);
+    nreq_s[i].used = 1; nreq_s[i].async = async; nreq_s[i].done = 0; nreq_s[i].cb = cb; nreq_s[i].arg = arg;
+    g_ios_native_calls++;
+    execute(req);
+    if (async) return 0;
+    if (!nreq_s[i].done) { rt_log("ios", "native IOS: synchronous request %u on fd %d is still pending (not supported)", cmd, (int)fd); return -22; }
+    nreq_s[i].used = 0;
+    return nreq_s[i].result;
+}
+#define R(n) ctx->r[n]
+void hle_IOS_Open(ppc_context *ctx, uint8_t *b)        { (void)b; R(3) = (uint32_t)ios_native(0, IPC_OPEN, 0, R(3), R(4), 0, 0, 0, 0, 0); }
+void hle_IOS_OpenAsync(ppc_context *ctx, uint8_t *b)   { (void)b; R(3) = (uint32_t)ios_native(1, IPC_OPEN, 0, R(3), R(4), 0, 0, 0, R(5), R(6)); }
+void hle_IOS_Close(ppc_context *ctx, uint8_t *b)       { (void)b; R(3) = (uint32_t)ios_native(0, IPC_CLOSE, R(3), 0, 0, 0, 0, 0, 0, 0); }
+void hle_IOS_CloseAsync(ppc_context *ctx, uint8_t *b)  { (void)b; R(3) = (uint32_t)ios_native(1, IPC_CLOSE, R(3), 0, 0, 0, 0, 0, R(4), R(5)); }
+void hle_IOS_Read(ppc_context *ctx, uint8_t *b)        { (void)b; R(3) = (uint32_t)ios_native(0, IPC_READ, R(3), R(4), R(5), 0, 0, 0, 0, 0); }
+void hle_IOS_ReadAsync(ppc_context *ctx, uint8_t *b)   { (void)b; R(3) = (uint32_t)ios_native(1, IPC_READ, R(3), R(4), R(5), 0, 0, 0, R(6), R(7)); }
+void hle_IOS_Write(ppc_context *ctx, uint8_t *b)       { (void)b; R(3) = (uint32_t)ios_native(0, IPC_WRITE, R(3), R(4), R(5), 0, 0, 0, 0, 0); }
+void hle_IOS_WriteAsync(ppc_context *ctx, uint8_t *b)  { (void)b; R(3) = (uint32_t)ios_native(1, IPC_WRITE, R(3), R(4), R(5), 0, 0, 0, R(6), R(7)); }
+void hle_IOS_Seek(ppc_context *ctx, uint8_t *b)        { (void)b; R(3) = (uint32_t)ios_native(0, IPC_SEEK, R(3), R(4), R(5), 0, 0, 0, 0, 0); }
+void hle_IOS_SeekAsync(ppc_context *ctx, uint8_t *b)   { (void)b; R(3) = (uint32_t)ios_native(1, IPC_SEEK, R(3), R(4), R(5), 0, 0, 0, R(6), R(7)); }
+void hle_fn_80225640(ppc_context *ctx, uint8_t *b)     { (void)b; R(3) = (uint32_t)ios_native(0, IPC_IOCTL, R(3), R(4), R(5), R(6), R(7), R(8), 0, 0); }   /* IOS_Ioctl */
+void hle_IOS_IoctlAsync(ppc_context *ctx, uint8_t *b)  { (void)b; R(3) = (uint32_t)ios_native(1, IPC_IOCTL, R(3), R(4), R(5), R(6), R(7), R(8), R(9), R(10)); }
+void hle_IOS_Ioctlv(ppc_context *ctx, uint8_t *b)      { (void)b; R(3) = (uint32_t)ios_native(0, IPC_IOCTLV, R(3), R(4), R(5), R(6), R(7), 0, 0, 0); }
+void hle_IOS_IoctlvAsync(ppc_context *ctx, uint8_t *b) { (void)b; R(3) = (uint32_t)ios_native(1, IPC_IOCTLV, R(3), R(4), R(5), R(6), R(7), 0, R(8), R(9)); }
+#undef R
+
+void sysconf_register_remotes(const char *path);
 void ios_init(void) {
     char p[1200];
-    snprintf(p, sizeof p, "%s/nand/shared2/sys/SYSCONF", g_root);
-    if (!file_exists(p)) rt_log("ios", "note: no SYSCONF at %s (settings will use defaults)", p);
+    snprintf(p, sizeof p, "%s/shared2/sys/SYSCONF", rt_nand_root());
+    if (!file_exists(p)) { rt_log("ios", "note: no SYSCONF at %s (settings will use defaults)", p); return; }
+    sysconf_register_remotes(p);
+}
+
+/* SYSCONF BT.DINF: the Wii Remotes the console is paired with - the four emulated ones
+   (rt_wiimote.c, addresses 00:00:79:19:02:11 + i reversed), registered and active in order so
+   remote i is WPAD channel i. Older installs registered one. */
+void sysconf_register_remotes(const char *path) {
+    FILE *f = fopen(path, "rb"); if (!f) return;
+    uint8_t b[0x4000]; size_t n = fread(b, 1, sizeof b, f); fclose(f);
+    if (n != sizeof b || memcmp(b, "SCv0", 4)) return;
+    int count = (b[4] << 8) | b[5];
+    for (int i = 0; i < count; i++) {
+        int off = (b[6 + 2 * i] << 8) | b[7 + 2 * i];
+        if (off < 8 || off + 12 > (int)n) continue;
+        int type = b[off] >> 5, nlen = (b[off] & 0x1F) + 1;
+        if (type != 1 || nlen != 7 || memcmp(b + off + 1, "BT.DINF", 7)) continue;
+        int dlen = ((b[off + 8] << 8) | b[off + 9]) + 1;
+        uint8_t *d = b + off + 10;
+        if (dlen < 1 + 15 * 0x46 || off + 10 + dlen > (int)n) return;
+        uint8_t want[1 + 15 * 0x46]; memset(want, 0, sizeof want);
+        want[0] = 4;
+        for (int r = 0; r < 4; r++) {
+            uint8_t pad[0x46]; memset(pad, 0, sizeof pad);
+            const uint8_t addr[6] = {(uint8_t)r, 0x00, 0x79, 0x19, 0x02, 0x11};
+            memcpy(pad, addr, 6); memcpy(pad + 6, "Nintendo RVL-CNT-01", 19);
+            memcpy(want + 1 + r * 0x46, pad, 0x46);             /* registered[r] */
+            memcpy(want + 1 + (10 + r) * 0x46, pad, 0x46);      /* active[r] */
+        }
+        if (!memcmp(d, want, sizeof want)) return;              /* already */
+        memcpy(d, want, sizeof want);
+        f = fopen(path, "wb"); if (!f) return;
+        fwrite(b, 1, n, f); fclose(f);
+        rt_log("ios", "SYSCONF: four Wii Remotes registered (BT.DINF)");
+        return;
+    }
 }

@@ -209,7 +209,7 @@ static uint64_t texture_hash(uint32_t addr, uint32_t w, uint32_t h, uint32_t fmt
     static const int bh[16] = {8, 4, 4, 4, 4, 4, 4, 0, 8, 4, 4, 0, 0, 0, 8, 0};
     int tw = bw[fmt & 15] ? bw[fmt & 15] : 4, th = bh[fmt & 15] ? bh[fmt & 15] : 4;
     size_t bytes = (size_t)((w + tw - 1) / tw) * ((h + th - 1) / th) * (fmt == 6 ? 64 : 32);
-    { uint32_t pa = addr & 0x3FFFFFFF; if (!((pa + bytes <= 0x01900000u) || (pa >= 0x10000000u && pa + bytes <= 0x14000000u))) bytes = 0; }
+    { uint32_t pa = addr & 0x3FFFFFFF; if (!((pa + bytes <= 0x02000000u) || (pa >= 0x10000000u && pa + bytes <= 0x14000000u))) bytes = 0; }
     static int full = -1; if (full < 0) full = getenv("RT_TEXFULLHASH") != NULL;
     uint64_t hv = (full || hash_full_next) ? XXH3_64bits(g_base + (addr & 0x3FFFFFFF), bytes) ^ bytes : hash_sampled(g_base + (addr & 0x3FFFFFFF), bytes);
     hash_full_next = 0;
@@ -227,7 +227,7 @@ static uint64_t texture_hash(uint32_t addr, uint32_t w, uint32_t h, uint32_t fmt
 static int band_eligible(texent *t) {
     size_t n = tex_bytes(t->w, t->h, t->fmt);
     uint32_t pa = t->addr & 0x3FFFFFFF;
-    if (!((pa + n <= 0x01900000u) || (pa >= 0x10000000u && pa + n <= 0x14000000u))) return 0;
+    if (!((pa + n <= 0x02000000u) || (pa >= 0x10000000u && pa + n <= 0x14000000u))) return 0;
     return n >= 128 * 1024 && !(t->fmt >= 8 && t->fmt <= 10) && !t->hd;
 }
 static void band_hashes(texent *t, int compare) {
@@ -272,7 +272,7 @@ static void tex_hd_lookup(texent *t, int map) {
     static const int bh[16] = {8, 4, 4, 4, 4, 4, 4, 0, 8, 4, 4, 0, 0, 0, 8, 0};
     int tw = bw[t->fmt & 15] ? bw[t->fmt & 15] : 4, th = bh[t->fmt & 15] ? bh[t->fmt & 15] : 4;
     size_t bytes = (size_t)((t->w + tw - 1) / tw) * ((t->h + th - 1) / th) * (t->fmt == 6 ? 64 : 32);
-    { uint32_t pa = t->addr & 0x3FFFFFFF; if (!((pa + bytes <= 0x01900000u) || (pa >= 0x10000000u && pa + bytes <= 0x14000000u))) return; }
+    { uint32_t pa = t->addr & 0x3FFFFFFF; if (!((pa + bytes <= 0x02000000u) || (pa >= 0x10000000u && pa + bytes <= 0x14000000u))) return; }
     int g = map >> 2, i = map & 3; uint32_t mode0 = bp((g ? 0xA0 : 0x80) + i);
     size_t to = t->tlut & (sizeof tmem - 1);
     t->hd = hd_lookup(g_base + (t->addr & 0x3FFFFFFF), bytes, tmem + to, sizeof tmem - to, t->w, t->h, t->fmt, ((mode0 >> 5) & 3) != 0);
@@ -320,6 +320,7 @@ static texent *get_texture(int map) {
     return best;
 }
 void gx_render_tex_invalidate(void) { tex_epoch++; }
+void gx_render_state_loaded(void) { gx_render_tex_invalidate(); }   /* (rt_state.c: guest memory was replaced) */
 void gx_render_tlut_load(int reg, uint32_t val) {
     if (reg != 0x65) return;
     uint32_t src = (bp(0x64) & 0xFFFFFF) << 5, dst = (val & 0x3FF) << 9, cnt = ((val >> 10) & 0x7FF) * 32;
@@ -550,7 +551,7 @@ static uint32_t frame_draws;
 /* RT_GXSTATS: per-frame counts of where triangles/pixels are dropped (approximate across threads) */
 static int gxstats = -1;
 static uint64_t st_tri_in, st_tri_clip, st_tri_zero, st_tri_cull, st_tri_sc, st_tri_ok, st_px, st_px_z, st_px_a, st_px_w, st_persp;
-uint64_t g_frames_presented;
+uint64_t g_frames_presented RT_STATE;          /* (the game's timing reads it: part of a save state) */
 /* performance breakdown, logged every 300 presented frames */
 static double g_perf_drawcount;
 uint64_t g_perf_draw_ns, g_perf_copy_ns, g_perf_present_ns, g_perf_ax_ns, g_perf_xform_ns, g_perf_key_ns;
@@ -560,10 +561,11 @@ static void perf_report(void) {
     if (t0 && g_frames_presented > f0) {
         double n = (double)(g_frames_presented - f0), wall = (now - t0) / 1e6 / n;
         double d = g_perf_draw_ns / 1e6 / n, c = g_perf_copy_ns / 1e6 / n, pr = g_perf_present_ns / 1e6 / n, ax = g_perf_ax_ns / 1e6 / n;
-        extern uint64_t g_perf_flush_ns; extern uint32_t g_perf_batches;
+        extern uint64_t g_perf_flush_ns, g_idle_sleep_ns; extern uint32_t g_perf_batches;
         rt_log("perf", "%.1f fps | per frame: %.2f ms total = draws %.2f (vertex decode/transform %.2f, shader lookup %.2f, GL submit %.2f in %.0f batches for %.0f draws) + efb copies %.2f + present %.2f + audio %.2f + game code/idle %.2f",
                1000.0 / wall, wall, d, g_perf_xform_ns / 1e6 / n, g_perf_key_ns / 1e6 / n, g_perf_flush_ns / 1e6 / n, g_perf_batches / n, g_perf_drawcount / n, c, pr, ax, wall - d - c - pr - ax);
-        g_perf_flush_ns = 0; g_perf_batches = 0;
+        if (g_idle_sleep_ns) rt_log("perf", "  (of which the CPU slept %.2f ms per frame instead of spinning while the game waited)", g_idle_sleep_ns / 1e6 / n);
+        g_perf_flush_ns = 0; g_perf_batches = 0; g_idle_sleep_ns = 0;
     }
     t0 = now; f0 = g_frames_presented; g_perf_drawcount = 0; g_perf_draw_ns = g_perf_copy_ns = g_perf_present_ns = g_perf_ax_ns = g_perf_xform_ns = g_perf_key_ns = 0;
 }
@@ -965,8 +967,10 @@ void gx_render_draw(int prim, int vat, uint32_t count, const uint8_t *data) {
     gx_render_draw_impl(prim, vat, count, data);
     g_perf_draw_ns += rt_now_ns() - t;
 }
+static int g_null_render;                                    /* NSMBW_RENDERER=null: draw nothing (logic/timing tests) */
 static void gx_render_draw_impl(int prim, int vat, uint32_t count, const uint8_t *data) {
     if (!count) return;
+    if (g_null_render || g_resim) { frame_draws++; return; }   /* (g_resim: fields run again after a rollback - not shown) */
     if (gl_on) { gl_draw(prim, vat, count, data); if (!gl_cmp) return; frame_draws--; }
     static int drawcmp_frame = -2; static uint64_t prev_diff;
     if (drawcmp_frame == -2) { const char *e = getenv("RT_GLDRAWCMP"); drawcmp_frame = e ? atoi(e) : -1; }
@@ -1064,6 +1068,15 @@ static void write_tex_texel(uint8_t *dst, int fmt, int x, int y, int w, uint32_t
 
 static void gx_render_efb_copy_impl(uint32_t val);
 void gx_render_efb_copy(uint32_t val) {
+    if (g_det) {                                            /* (what the renderer writes to RAM isn't the game's state: rt_det.c) */
+        uint32_t wh = bp(0x4A), dest = (bp(0x4B) & 0xFFFFFF) << 5, w = (wh & 0x3FF) + 1, h = ((wh >> 10) & 0x3FF) + 1;
+        uint32_t stride = (bp(0x4D) & 0x3FF) * 32, bytes = w * h * 4, sb = stride * ((h + 3) / 4 + 1);   /* (into a wider texture: its stride) */
+        det_renderer_writes(dest, bytes > sb ? bytes : sb);
+    }
+    if (g_resim) {                                          /* (fields run again after a rollback: nothing to show or copy) */
+        if (val & (1u << 14)) { g_frames_presented++; frame_draws = 0; }
+        return;
+    }
     uint64_t t = rt_now_ns(), p0 = g_perf_present_ns;
     gx_render_efb_copy_impl(val);
     g_perf_copy_ns += (rt_now_ns() - t) - (g_perf_present_ns - p0);
@@ -1205,11 +1218,14 @@ static void gx_render_efb_copy_impl(uint32_t val) {
 }
 
 static int gl_init(void);
+int g_gx_software;                                           /* 1 = CPU renderer (shown in the window title) */
 void gx_render_init(void) {
     gx_render_tex_invalidate();
     const char *r = getenv("NSMBW_RENDERER");
     if (r && !strcmp(r, "sw")) rt_log("gx", "software renderer (NSMBW_RENDERER=sw)");
+    else if (r && !strcmp(r, "null")) { g_null_render = 1; rt_log("gx", "null renderer (NSMBW_RENDERER=null): nothing is drawn (testing)"); }
     else if (!(gl_on = gl_init())) rt_log("gx", "OpenGL unavailable: using the software renderer");
+    g_gx_software = !gl_on;
     if (gl_on) hd_init();
     if (gl_on && getenv("RT_GLCOMPARE")) { gl_cmp = 1; rt_log("gx", "comparing OpenGL against the software renderer"); }
 }

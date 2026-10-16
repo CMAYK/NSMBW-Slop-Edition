@@ -17,16 +17,17 @@
 #else
 #include <sys/mman.h>
 #endif
+RT_STATE_FILE                                   /* (this file's variables are part of a save state: rt_state.c) */
 
-uint8_t *g_base;
-char g_root[1024], g_disc[1024];
-int g_verbose = 0;
+uint8_t *g_base RT_LOCAL;
+char g_root[1024] RT_LOCAL, g_disc[1024] RT_LOCAL;
+int g_verbose RT_LOCAL = 0;
 volatile uint32_t ppc_poll_counter;
 #ifdef PPC_TRACE
-uint32_t ppc_trace_ring[256]; uint32_t ppc_trace_pos;
+uint32_t ppc_trace_ring[256] RT_LOCAL; uint32_t ppc_trace_pos RT_LOCAL;
 /* RT_FUNCSTAT="first,count": histogram of recently entered guest functions, sampled once per VI
  * field over that range of fields, printed at the end (debug aid for "what is the game doing"). */
-static uint32_t fs_key[1 << 16], fs_cnt[1 << 16];
+static uint32_t fs_key[1 << 16] RT_LOCAL, fs_cnt[1 << 16] RT_LOCAL;
 void rt_funcstat_tick(void) {
     static int init, first, count; static uint64_t field;
     if (!init) { init = 1; const char *e = getenv("RT_FUNCSTAT"); if (e) sscanf(e, "%d,%d", &first, &count); }
@@ -143,12 +144,14 @@ void rt_dump_threads(void) {
     fprintf(stderr, "guest threads (current %08X):\n", R32(0x800000E4));
     uint32_t t = R32(0x800000DC);
     for (int i = 0; t && i < 32; i++, t = R32(t + 0x2FC)) {
+        if (!((t >= 0x80000000u && t < 0x81800000u) || (t >= 0x90000000u && t < 0x94000000u))) { fprintf(stderr, "  (bad thread pointer %08X)\n", t); break; }
         fprintf(stderr, "  thread %08X state %u prio %d suspend %d\n", t, R16(t + 0x2C8), (int)R32(t + 0x2D0), (int)R32(t + 0x2CC));
         backtrace_guest(R32(t + 4), R32(t + 0x84));
     }
 }
 void rt_dump_trace(void) {
     rt_dump_threads();
+    { extern void rt_hang_state(void); rt_hang_state(); }
 #ifdef PPC_TRACE
     fprintf(stderr, "last functions entered (oldest first):\n");
     for (int i = 0; i < 48; i++) {
@@ -167,25 +170,90 @@ static const struct { const char *key; int def; const char *help; } setting_defs
     {"fullscreen", 0, "1 = fullscreen (borderless, the size of the monitor; F11 or Alt+Enter toggles, Esc leaves it)"},
     {"texture_filter", 1, "0 = nearest (pixel perfect), 1 = bilinear, 2/3/4/5 = anisotropic 2x/4x/8x/16x"},
     {"aspect_4_3", 1, "1 = full-screen 4:3 gameplay (no letterbox), 0 = widescreen 16:9"},
-    /* mkwcat's nsmbw-project (8 players) options, read when the game starts */
-    {"mod_shake_with_button", 0, "8-player mod: 1 = a button does the shake/spin (no motion needed)"},
-    {"mod_death_messages", 0, "8-player mod: show messages when players die: 0 = off, 1 = on all damage, 2 = only on death"},
-    {"mod_infinite_lives", 0, "8-player mod: 1 = count deaths instead of lives (no game over)"},
-    {"mod_no_powerup_pause", 0, "8-player mod: 1 = don't pause the game when someone powers up"},
-    {"mod_always_exit_course", 0, "8-player mod: 1 = Exit Course is always available in the pause menu"},
-    {"mod_hide_motion_guides", 1, "8-player mod: hide motion control speech bubbles: 0 = never, 1 = with 5+ players, 2 = always"},
-    {"mod_yoshi_colors", 0, "8-player mod: Yoshi colors: 0 = normal, 1 = random, 2 = always green"},
-    {"mod_unlocked_all_worlds", 0, "8-player mod: 1 = all worlds available"},
-    {"mod_all_paths_open", 0, "8-player mod: 1 = all world map paths available"},
-    {"mod_liftable_tiles", 0, "8-player mod: 1 = liftable tiles"},
-    {"mod_bubble_swarm", 0, "8-player mod: 1 = 1-Up bubble swarm mode"},
-    {"mod_deadly_1up", 0, "8-player mod: 1 = deadly 1-ups"},
+    /* gameplay options (the 8-player features, read when the game starts) */
+    {"shake_with_button", 0, "1 = a button does the shake/spin (no motion needed)"},
+    {"death_messages", 0, "show messages when players die: 0 = off, 1 = on all damage, 2 = only on death"},
+    {"infinite_lives", 0, "1 = count deaths instead of lives (no game over)"},
+    {"no_powerup_pause", 0, "1 = don't pause the game when someone powers up"},
+    {"always_exit_course", 0, "1 = Exit Course is always available in the pause menu"},
+    {"hide_motion_guides", 1, "hide motion control speech bubbles: 0 = never, 1 = with 5+ players, 2 = always"},
+    {"yoshi_colors", 0, "Yoshi colors: 0 = normal, 1 = random, 2 = always green"},
+    {"unlock_all_worlds", 0, "1 = all worlds available"},
+    {"all_paths_open", 0, "1 = all world map paths available"},
+    {"liftable_tiles", 0, "1 = liftable tiles"},
+    {"bubble_swarm", 0, "1 = 1-Up bubble swarm mode"},
+    {"deadly_1up", 0, "1 = deadly 1-ups"},
+    /* retro characters (rt_retro.c) */
+    {"retro_mario", 0, "testing: 1 = every Mario plays as SMB1 Mario (normally picked in the character select)"},
+    {"retro_sfx_volume", 70, "volume of the retro characters' sound effects, 0-100"},
+    /* online play (rt_net.c) */
+    {"net_port", 41790, "online: the UDP port you host on (forward it on your router)"},
+    {"net_rollback", 1, "online (host): 1 = rollback (your own buttons act at once, the others' are guessed and corrected), 0 = lockstep"},
+    {"net_input_delay", 0, "online (host): input delay in video fields (17 ms each). Rollback: 0 = none (default), 1-8; lockstep: 0 = automatic from the pings, 1-15"},
+    /* updates (rt_update.c) */
+    {"discord_presence", 1, "1 = show what you're playing on your Discord profile (when the Discord app is running), 0 = off"},
+    {"update_check", 1, "1 = look for a new version of the game at start (and download it), 0 = never"},
 };
-static char setting_keys[64][64]; static int setting_vals[64], nsettings, settings_loaded;
+/* keys the 8-player options had while they were a separate mod ("mod_..."): still read, and
+   rewritten to the new names the first time settings.ini is loaded */
+static const char *setting_aliases[][2] = {
+    {"mod_unlocked_all_worlds", "unlock_all_worlds"}, {"mod_completed_all_levels", "complete_all_levels"},
+    {"mod_no_powerup_pause", "no_powerup_pause"}, {"mod_infinite_lives", "infinite_lives"}, {"mod_death_messages", "death_messages"},
+    {"mod_fall_damage", "fall_damage"}, {"mod_skip_opening_movie", "skip_opening_movie"}, {"mod_always_exit_course", "always_exit_course"},
+    {"mod_shake_with_button", "shake_with_button"}, {"mod_hide_motion_guides", "hide_motion_guides"}, {"mod_yoshi_colors", "yoshi_colors"},
+    {"mod_liftable_tiles", "liftable_tiles"}, {"mod_bubble_swarm", "bubble_swarm"}, {"mod_deadly_1up", "deadly_1up"},
+    {"mod_all_paths_open", "all_paths_open"},
+};
+static const char *setting_new_name(const char *k) {
+    for (size_t i = 0; i < sizeof setting_aliases / sizeof *setting_aliases; i++) if (!strcmp(k, setting_aliases[i][0])) return setting_aliases[i][1];
+    return NULL;
+}
+static void settings_migrate_file(const char *p) {        /* "mod_x = v" -> "x = v", "; 8-player mod: help" -> new help */
+    FILE *f = fopen(p, "r"); if (!f) return;
+    char *out = NULL; size_t n = 0, cap = 0; int changed = 0; char line[512];
+    while (fgets(line, sizeof line, f)) {
+        char k[64]; int v; const char *nk;
+        if (line[0] != ';' && sscanf(line, " %63[A-Za-z0-9_] = %d", k, &v) == 2 && (nk = setting_new_name(k))) { snprintf(line, sizeof line, "%s = %d\n", nk, v); changed = 1; }
+        else if (!strncmp(line, "; 8-player mod: ", 16)) { memmove(line + 2, line + 16, strlen(line + 16) + 1); changed = 1; }
+        else if (!strncmp(line, "; online (host): input delay in video fields, 1-8", 49)) {   /* (the old fixed default 3: now automatic) */
+            snprintf(line, sizeof line, "; online (host): input delay in video fields (17 ms each). Rollback: 0 = none (default), 1-8; lockstep: 0 = automatic from the pings, 1-15\n"); changed = 2; }
+        else if (changed == 2 && sscanf(line, " net_input_delay = %d", &v) == 1) { if (v == 3) snprintf(line, sizeof line, "net_input_delay = 0\n"); changed = 1; }
+        size_t l = strlen(line);
+        if (n + l + 1 > cap) { cap = (n + l + 1) * 2; out = realloc(out, cap); }
+        memcpy(out + n, line, l + 1); n += l;
+    }
+    fclose(f);
+    if (changed && (f = fopen(p, "w"))) { fwrite(out, 1, n, f); fclose(f); rt_log("settings", "renamed the old mod_* options in settings.ini"); }
+    free(out);
+}
+static char setting_keys[64][64] RT_LOCAL; static int setting_vals[64] RT_LOCAL, nsettings RT_LOCAL, settings_loaded RT_LOCAL;
+/* settings each PC keeps for itself in an online game (the rest are the host's: online/settings.ini) */
+static int setting_is_local(const char *k) {
+    static const char *local[] = {"render_scale", "window_width", "window_height", "fixed_window_size", "fullscreen",
+                                  "texture_filter", "retro_sfx_volume", "net_port", "net_input_delay", "update_check", "discord_presence", NULL};
+    for (int i = 0; local[i]; i++) if (!strcmp(k, local[i])) return 1;
+    return 0;
+}
+static void settings_take_hosts(void) {
+    int n = 0;
+    for (int i = 0; i < nsettings; i++) if (setting_is_local(setting_keys[i])) { if (n != i) { memcpy(setting_keys[n], setting_keys[i], 64); setting_vals[n] = setting_vals[i]; } n++; }
+    nsettings = n;
+    char p[1300]; snprintf(p, sizeof p, "%s/settings.ini", rt_session_dir());
+    FILE *f = fopen(p, "r"); char line[256];
+    while (f && fgets(line, sizeof line, f) && nsettings < 64) {
+        char k[64]; int v;
+        if (line[0] == ';' || line[0] == '#') continue;
+        if (sscanf(line, " %63[A-Za-z0-9_] = %d", k, &v) == 2 && !setting_is_local(k)) { snprintf(setting_keys[nsettings], 64, "%s", k); setting_vals[nsettings++] = v; }
+    }
+    if (f) fclose(f);
+    rt_log("settings", "online game: the host's game settings");
+}
+void rt_settings_reload(void) { settings_loaded = 0; nsettings = 0; }   /* (an online game starts / ends) */
 int rt_setting(const char *key, int def) {
     if (!settings_loaded) {
         settings_loaded = 1;
         char p[1200]; snprintf(p, sizeof p, "%s/settings.ini", g_root);
+        settings_migrate_file(p);
         FILE *f = fopen(p, "r");
         if (!f) {                                        /* first run: write the defaults, documented */
             if ((f = fopen(p, "w"))) {
@@ -211,8 +279,10 @@ int rt_setting(const char *key, int def) {
             if (a) fprintf(a, "\n; %s\n%s = %d\n", setting_defs[d].help, setting_defs[d].key, setting_defs[d].def);
         }
         if (a) fclose(a);
+        if (session_on()) settings_take_hosts();
     }
     for (int i = 0; i < nsettings; i++) if (!strcmp(setting_keys[i], key)) return setting_vals[i];
+    { const char *nk = setting_new_name(key); if (nk) return rt_setting(nk, def); }   /* asked by an old name */
     return def;
 }
 /* change a setting and save it: the "key = value" line in settings.ini is rewritten in place */
@@ -222,6 +292,7 @@ void rt_setting_set(const char *key, int val) {
     for (int i = 0; i < nsettings; i++) if (!strcmp(setting_keys[i], key)) { setting_vals[i] = val; found = 1; }
     if (!found && nsettings < 64) { snprintf(setting_keys[nsettings], 64, "%s", key); setting_vals[nsettings++] = val; }
     char p[1200]; snprintf(p, sizeof p, "%s/settings.ini", g_root);
+    if (session_on() && !setting_is_local(key)) snprintf(p, sizeof p, "%s/settings.ini", rt_session_dir());   /* (the session's own copy) */
     FILE *f = fopen(p, "r"); char *out = NULL; size_t n = 0, cap = 0; int written = 0;
     char line[256];
     while (f && fgets(line, sizeof line, f)) {
@@ -238,10 +309,10 @@ void rt_setting_set(const char *key, int val) {
 }
 
 /* ------------------------------------------------------------------ time */
-static uint64_t t0_ns; static int64_t tb_offset;
+static uint64_t t0_ns RT_LOCAL; static int64_t tb_offset;
 static uint64_t os_now_ns(void) {
 #ifdef _WIN32
-    static LARGE_INTEGER f; LARGE_INTEGER c;
+    static LARGE_INTEGER f RT_LOCAL; LARGE_INTEGER c;
     if (!f.QuadPart) QueryPerformanceFrequency(&f);
     QueryPerformanceCounter(&c);
     return (uint64_t)((double)c.QuadPart * 1e9 / (double)f.QuadPart);
@@ -255,7 +326,7 @@ static uint64_t os_now_ns(void) {
  * costs a few ns instead of a system call / QueryPerformanceCounter. */
 #if defined(__x86_64__) || defined(_M_X64)
 #include <x86intrin.h>
-static double tsc_scale; static uint64_t tsc0, tns0; static volatile int clk_state;
+static double tsc_scale RT_LOCAL; static uint64_t tsc0 RT_LOCAL, tns0 RT_LOCAL; static volatile int clk_state RT_LOCAL;
 uint64_t rt_now_ns(void) {
     if (clk_state == 2) return tns0 + (uint64_t)((double)(__rdtsc() - tsc0) * tsc_scale);
     uint64_t n = os_now_ns(), t = __rdtsc();
@@ -266,11 +337,33 @@ uint64_t rt_now_ns(void) {
 #else
 uint64_t rt_now_ns(void) { return os_now_ns(); }
 #endif
-uint64_t rt_tb_now(void) {
-    uint64_t ns = rt_now_ns() - t0_ns;
-    return (uint64_t)((int64_t)((ns / 1000000000ull) * TB_HZ + (ns % 1000000000ull) * TB_HZ / 1000000000ull) + tb_offset);
+/* ---- deterministic mode (online play, docs/ONLINE.md) ----
+ * Normally the emulated hardware runs on the PC's clock. With g_det on, it runs on a virtual
+ * clock instead: g_vt_ns advances by VT_POLL_NS at every poll point and by VT_TB_NS at every
+ * time-base read (a spin loop on OSGetTime still ends), and jumps to the next timed event when
+ * the guest is idle; the PC's clock only paces it (det_pace). The same code with the same
+ * inputs then does the same thing on every PC, at the same virtual times. */
+int g_det RT_LOCAL;                         /* (the session decides: not part of a state) */
+uint64_t g_vt_ns = 1000000000ull;
+#define VT_POLL_NS 2000ull
+#define VT_TB_NS   20ull
+uint64_t rt_emu_ns(void) { return g_det ? g_vt_ns : rt_now_ns(); }
+/* switch to the virtual clock now (an online game starts), the clocks going on without a jump */
+static uint64_t det_t0;
+void rt_det_enable(void) {
+    if (g_det) return;
+    uint64_t now = rt_now_ns();
+    g_vt_ns = now; det_t0 = t0_ns; g_det = 1;
+    rt_log("cpu", "deterministic mode from now on (online game)");
 }
-uint64_t ppc_timebase(void) { return rt_tb_now(); }
+static uint64_t det_t0;
+uint64_t rt_tb_now(void) {
+    /* (one multiply instead of two 64-bit divisions: this runs on every poll and every OSGetTick;
+       a double holds ns exactly for ~100 days and the scaling is monotonic) */
+    uint64_t ns = g_det ? g_vt_ns - det_t0 : rt_now_ns() - t0_ns;
+    return (uint64_t)((int64_t)((double)ns * ((double)TB_HZ / 1e9)) + tb_offset);
+}
+uint64_t ppc_timebase(void) { if (g_det) g_vt_ns += VT_TB_NS; return rt_tb_now(); }
 /* Gekko locked-cache DMA (DMA_U = SPR 922, DMA_L = SPR 923). The locked cache lives at
  * 0xE0000000, which our physical mask maps to 0x20000000 inside guest memory. NW4R G3D computes
  * model matrices there and DMAs them out, so without this every 3D model has zero matrices. */
@@ -297,16 +390,38 @@ void ppc_set_dec(ppc_context *ctx, uint32_t v) {
     (void)ctx;
     dec_deadline = rt_tb_now() + (int64_t)(int32_t)v;
     dec_armed = 1;
+    {   static int lg = -1; if (lg < 0) lg = getenv("RT_DEC_LOG") != NULL;
+        if (lg) { extern uint64_t g_vi_fields; rt_log("dec", "set field %llu vt %llu v %d lr %08X", (unsigned long long)g_vi_fields, (unsigned long long)g_vt_ns, (int32_t)v, ctx->lr); } }
 }
 
 /* ------------------------------------------------------------------ function lookup */
-static ppc_func lookup(uint32_t addr) {
+/* indirect calls (C++ virtual calls, callbacks - thousands per frame) look the target up in a
+   small direct-mapped cache before the binary search over ~40,000 functions */
+static struct { uint32_t addr; ppc_func fn; } icache[1 << 14] RT_LOCAL;
+static ppc_func lookup_slow(uint32_t addr);
+static inline ppc_func lookup(uint32_t addr) {
+    uint32_t i = (addr >> 2) & ((1 << 14) - 1);
+    if (icache[i].addr == addr && icache[i].fn) return icache[i].fn;
+    ppc_func f = lookup_slow(addr);
+    if (f) { icache[i].addr = addr; icache[i].fn = f; }
+    return f;
+}
+/* native functions given a guest address (rt_register_native): for vtables and callbacks that
+   guest code calls into native code through (e.g. a draw proc's drawOpa) */
+static struct { uint32_t addr; ppc_func fn; } native_fns[32] RT_LOCAL;
+static int native_count RT_LOCAL;
+void rt_register_native(uint32_t addr, ppc_func fn) {
+    for (int i = 0; i < native_count; i++) if (native_fns[i].addr == addr) { native_fns[i].fn = fn; return; }
+    if (native_count < 32) { native_fns[native_count].addr = addr; native_fns[native_count].fn = fn; native_count++; }
+}
+static ppc_func lookup_slow(uint32_t addr) {
     uint32_t lo = 0, hi = ppc_func_count;
     while (lo < hi) {
         uint32_t m = (lo + hi) / 2;
         if (ppc_func_table[m].addr == addr) return ppc_func_table[m].fn;
         if (ppc_func_table[m].addr < addr) lo = m + 1; else hi = m;
     }
+    for (int i = 0; i < native_count; i++) if (native_fns[i].addr == addr) return native_fns[i].fn;
     return NULL;
 }
 void ppc_call_indirect(ppc_context *ctx, uint8_t *base, uint32_t addr) {
@@ -361,6 +476,8 @@ typedef void *rt_jmpbuf_gnu[5];
 #define MAX_POLL 16
 typedef struct {
     uint32_t exc_ctx;               /* guest context the interrupt was taken in */
+    uint32_t defer_sda;             /* != 0: preemption was deferred for this handler (see below) */
+    uint64_t switches;              /* fiber switch count when the interrupt was taken (RT_PREEMPTLOG) */
     RT_JMPBUF jb;                   /* setjmp buffer */
     ppc_context *ctx;               /* everything needed after the jump lives here, not in */
     ppc_context snap;               /* registers: Win64 callee-saved regs aren't restored  */
@@ -379,6 +496,8 @@ typedef struct guest_thread {
 static struct { uint32_t gctx, srr0; guest_thread *t; } binds[MAX_BIND];
 static int nbinds;
 static guest_thread main_thread, *cur;
+#define MAX_THREADS 46
+static guest_thread thread_pool[MAX_THREADS]; static int nthreads;
 
 static void ctx_bind(uint32_t gctx, uint32_t srr0, guest_thread *t) {
     for (int i = 0; i < nbinds; i++)
@@ -396,7 +515,13 @@ enum { OSC_GPR = 0x0, OSC_CR = 0x80, OSC_LR = 0x84, OSC_CTR = 0x88, OSC_XER = 0x
        OSC_FPSCR = 0x194, OSC_SRR0 = 0x198, OSC_SRR1 = 0x19C, OSC_MODE = 0x1A0, OSC_STATE = 0x1A2,
        OSC_GQR = 0x1A4, OSC_PSF = 0x1C8 };
 
+static uint64_t g_fiber_switches;
 static void switch_to(guest_thread *t) {
+    g_fiber_switches++;
+    {   static long lf = -2, lt; if (lf == -2) { const char *e = getenv("RT_POLL_LOG"); lf = -1; if (e) sscanf(e, "%ld,%ld", &lf, &lt); }
+        extern uint64_t g_vi_fields;
+        if (lf >= 0 && (long)g_vi_fields >= lf && (long)g_vi_fields <= lt)
+            rt_log("poll", "switch %d -> %d vt %llu cnt %u tlr %08X tr1 %08X", cur == &main_thread ? -1 : (int)(cur - thread_pool), t == &main_thread ? -1 : (int)(t - thread_pool), (unsigned long long)g_vt_ns, ppc_poll_counter, t->ctx.lr, t->ctx.r[1]); }
     guest_thread *from = cur;
     cur = t;
     plat_fiber_switch(from->fiber, t->fiber);
@@ -438,7 +563,9 @@ void hle_OSLoadContext(ppc_context *ctx, uint8_t *base) {
         return;
     }
     /* a context that was never saved: a new thread starting at srr0 */
-    t = calloc(1, sizeof *t);
+    if (nthreads == MAX_THREADS) rt_fatal("too many guest threads");
+    t = &thread_pool[nthreads++];                  /* (a static pool: thread records are part of a save state) */
+    memset(t, 0, sizeof *t);
     for (int i = 0; i < 32; i++) t->ctx.r[i] = ld32(base, c + OSC_GPR + 4 * i);
     t->ctx.cr = ld32(base, c + OSC_CR);
     t->ctx.lr = ld32(base, c + OSC_LR);
@@ -457,15 +584,54 @@ void hle_OSLoadContext(ppc_context *ctx, uint8_t *base) {
 /* ------------------------------------------------------------------ exceptions */
 enum { EXC_EXTERNAL = 4, EXC_DECREMENTER = 8 };
 
+/* ---- deferred preemption (fix for the "random hang": game frozen, audio still running)
+ *
+ * Interrupts are only delivered at poll points: loop back-edges (every 256th) and the
+ * OSEnable/RestoreInterrupts calls. A back-edge is often exactly between a check and a sleep,
+ * e.g. the mDvd command thread:   for (;;) { OSSleepThread(q); while ((c = first)) run(c); }
+ * and mDvd_command_c::waitDone:    while (!done) OSSleepThread(q);
+ * If an interrupt there wakes a higher-priority thread, the OS switches to it on the spot (the
+ * interrupt handler ends with __OSReschedule). That thread queues the next disc command and
+ * wakes the queue - but the command thread isn't on it yet: it was preempted right before going
+ * to sleep, and then sleeps forever. The main thread then waits forever in waitDone. On a Wii
+ * the window is a few instructions and an interrupt landing in it is practically impossible;
+ * here every pending interrupt gets delivered at that one poll point, so it happens every few
+ * minutes ("random" freezes, mostly while something loads).
+ *
+ * Fix: interrupt handlers still run at once (flags, callbacks, wake-ups all happen), but the
+ * thread switch they ask for is postponed: the guest's scheduler lock (Reschedule, what
+ * OSDisableScheduler raises) is held while the handler runs, so __OSReschedule at its end does
+ * nothing and only RunQueueHint stays set. The switch then happens at the running thread's next
+ * scheduling call (OSSleepThread, OSWakeupThread, OSYieldThread, mutexes...) - for the races
+ * above that is the sleep itself, which is safe - or, if the thread keeps computing without one,
+ * at a poll point at most RESCHED_FORCE_NS later. RT_NODEFER=1 restores the old behaviour.
+ * Addresses: SelectThread's globals in the small-data area (r13): Reschedule at -20352,
+ * RunQueueHint at -20348; __OSReschedule at 801B50D0 (USA rev 2 main.dol). */
+#define SDA_RESCHEDULE   (-20352)
+#define SDA_RUNQUEUEHINT (-20348)
+#define A_OSRESCHEDULE   0x801B50D0u
+#define RESCHED_FORCE_NS 1000000ull
+static int defer_mode = -1;
+static int sda_ok(uint32_t r13) { return r13 >= 0x80000000u + 0x8000u && r13 < 0x81800000u; }
+uint64_t g_resched_deferred, g_resched_forced;              /* stats (hang reports) */
+static uint64_t g_defer_since;                               /* when a switch was first postponed (0 = none pending) */
+
+static void take_exception_at(ppc_context *ctx, uint8_t *base, int n, uint32_t handler);
 static void take_exception(ppc_context *ctx, uint8_t *base, int n) {
     uint32_t handler = ld32(base, 0x80003000u + 4u * n);
-    if (!handler) return;
+    if (handler) take_exception_at(ctx, base, n, handler);
+}
+static void take_exception_at(ppc_context *ctx, uint8_t *base, int n, uint32_t handler) {
     if (cur->npoll == MAX_POLL) return;
+    if (defer_mode < 0) { defer_mode = getenv("RT_NODEFER") == NULL; if (!defer_mode) rt_log("cpu", "deferred preemption off (RT_NODEFER)"); }
     uint32_t exc_ctx = ld32(base, 0x800000D4u);
     poll_frame *pf = &cur->polls[cur->npoll++];
     pf->exc_ctx = exc_ctx;
     pf->ctx = ctx;
     pf->snap = *ctx;
+    pf->defer_sda = (defer_mode && sda_ok(ctx->r[13])) ? ctx->r[13] : 0;
+    pf->switches = g_fiber_switches;
+    if (pf->defer_sda) W32(pf->defer_sda + SDA_RESCHEDULE, R32(pf->defer_sda + SDA_RESCHEDULE) + 1);
     st32(base, exc_ctx + OSC_SRR0, 0);
     st32(base, exc_ctx + OSC_SRR1, ctx->msr);
     if (RT_SETJMP(pf->jb) == 0) {
@@ -480,18 +646,179 @@ static void take_exception(ppc_context *ctx, uint8_t *base, int n) {
         guest_thread *volatile *pc = (guest_thread *volatile *)&cur;
         guest_thread *t = *pc;
         poll_frame *f = &t->polls[t->npoll - 1];
+        if (f->defer_sda) {
+            W32(f->defer_sda + SDA_RESCHEDULE, R32(f->defer_sda + SDA_RESCHEDULE) - 1);
+            if (R32(f->defer_sda + SDA_RUNQUEUEHINT)) { g_resched_deferred++; if (!g_defer_since) g_defer_since = rt_emu_ns(); }
+        }
+        {   /* RT_PREEMPTLOG=1: report interrupts that switched threads at a poll point (debug) */
+            static int pl = -1; if (pl < 0) pl = getenv("RT_PREEMPTLOG") != NULL;
+            if (pl && g_fiber_switches != f->switches) {
+                static uint64_t n; n++;
+                uint32_t lr = f->snap.lr;
+                int hot = lr == 0x8016B514u || lr == 0x8016B7A8u;          /* mDvd waitDone / command thread windows */
+                if (hot || n % 200 == 1) rt_log("preempt", "#%llu at poll after %08X (%s)%s", (unsigned long long)n, lr, rt_func_name(lr, NULL), hot ? "  <-- check-then-sleep race window" : "");
+            }
+        }
         *f->ctx = f->snap;
         t->npoll--;
     }
 }
 
+
+/* ------------------------------------------------------------------ native events (track A)
+ * Native replacements of the SDK's device libraries (docs/NATIVE_ROADMAP.md) finish their work
+ * at once, but the game expects completion callbacks "later, from an interrupt" - never inside
+ * the call that started the work. rt_post_callback(fn, a0, a1) queues a guest callback; it runs
+ * at the next point where the guest has interrupts enabled, in an interrupt-like frame (EE off,
+ * scheduler switches deferred - the same frame take_exception builds for real interrupts). */
+#define EV_MAX 128
+static struct { uint32_t fn, a0, a1; } ev_q[EV_MAX]; static int ev_n;
+#define EV_HANDLER 0x80001F00u                            /* (guest address of the native dispatcher) */
+void rt_post_callback(uint32_t fn, uint32_t a0, uint32_t a1) {
+    if (!fn) return;
+    if (ev_n == EV_MAX) rt_fatal("native event queue full (callback %08X)", fn);
+    ev_q[ev_n].fn = fn; ev_q[ev_n].a0 = a0; ev_q[ev_n].a1 = a1; ev_n++;
+}
+int rt_events_pending(void) { return ev_n; }
+static void ev_dispatch(ppc_context *ctx, uint8_t *base) {
+    while (ev_n) {
+        uint32_t fn = ev_q[0].fn, a0 = ev_q[0].a0, a1 = ev_q[0].a1;
+        memmove(&ev_q[0], &ev_q[1], sizeof ev_q[0] * (size_t)(ev_n - 1)); ev_n--;
+        ctx->r[3] = a0; ctx->r[4] = a1; ctx->lr = 0;
+        ppc_call_indirect(ctx, base, fn);
+    }
+}
+
+/* a switch asked for by an interrupt that the running thread hasn't reached a scheduling call
+   for: do it here, like the end of an interrupt handler would (interrupts off, registers kept) */
+static void maybe_force_resched(ppc_context *ctx, uint8_t *base) {
+    if (!g_defer_since) return;
+    uint32_t sda = ctx->r[13];
+    if (!sda_ok(sda) || cur->npoll) return;
+    if (!R32(sda + SDA_RUNQUEUEHINT)) { g_defer_since = 0; return; }   /* the thread got there by itself */
+    if ((int32_t)R32(sda + SDA_RESCHEDULE) > 0) return;               /* guest holds the scheduler lock */
+    if (rt_emu_ns() - g_defer_since < RESCHED_FORCE_NS) return;
+    g_defer_since = 0;
+    ppc_context snap = *ctx;
+    ctx->msr &= ~0x8000u;
+    g_resched_forced++;
+    ppc_call_indirect(ctx, base, A_OSRESCHEDULE);        /* may switch threads; returns when we run again */
+    *ctx = snap;
+}
+
+/* Idle: when no guest thread can run, the OS spins in SelectThread's idle loop (current thread
+   = NULL) until an interrupt makes one ready. Every interrupt source is either immediate (then
+   pi_active() is already set) or timed, so instead of spinning a CPU core at 100 % the host
+   thread sleeps until shortly before the next timed event. NSMBW_IDLESLEEP=0 keeps spinning. */
+uint64_t hw_next_event_ns(void);
+void plat_idle_wait(uint64_t ns);
+uint64_t g_idle_sleep_ns RT_LOCAL;
+/* deterministic mode: keep the virtual clock near the PC's (sleep while it is ahead) */
+static uint64_t pace_wall0 RT_LOCAL, pace_vt0 RT_LOCAL;   /* (the PC's clock: after a load, pacing starts anew) */
+void det_pace_reset(void) { pace_wall0 = 0; }
+void det_pace_slow(uint64_t ns) { if (pace_wall0) pace_wall0 += ns; }   /* (online time sync: this PC runs ns later from now on) */
+extern int g_det_fast;                              /* rt_net.c: catching up with the online game */
+static void det_pace(void) {
+    uint64_t wall = rt_now_ns();
+    if (g_det_fast || g_resim) { pace_wall0 = 0; return; }   /* (unpaced; pacing starts anew afterwards) */
+    if (!pace_wall0 || g_vt_ns < pace_vt0) { pace_wall0 = wall; pace_vt0 = g_vt_ns; }
+    uint64_t target = pace_wall0 + (g_vt_ns - pace_vt0);
+    if (wall > target + 100000000ull) { pace_wall0 += wall - target; return; }   /* (far behind: don't race to catch up) */
+    if (target > wall + 300000ull) { uint64_t ns = target - wall; if (ns > 4000000ull) ns = 4000000ull; plat_idle_wait(ns); g_idle_sleep_ns += ns; }
+}
+static void idle_wait(ppc_context *ctx) {
+    static int on = -1;
+    if (g_det) {                                            /* nothing to run: on to the next timed event */
+        if (R32(0x800000E4) != 0 || cur->npoll || pi_active() || ev_n) return;
+        (void)ctx;
+        uint64_t next = hw_next_event_ns();
+        if (dec_armed) {
+            int64_t dt = (int64_t)(dec_deadline - rt_tb_now());
+            uint64_t dn = dt <= 0 ? g_vt_ns : g_vt_ns + (uint64_t)dt * 1000000000ull / TB_HZ + 1;
+            if (dn < next) next = dn;
+        }
+        if (next > g_vt_ns) g_vt_ns = next;
+        det_pace();
+        return;
+    }
+    if (on < 0) { const char *e = getenv("NSMBW_IDLESLEEP"); on = !(e && *e == '0'); }
+    if (!on || R32(0x800000E4) != 0 || cur->npoll || pi_active() || ev_n) return;
+    (void)ctx;
+    uint64_t now = rt_now_ns(), next = hw_next_event_ns();
+    if (dec_armed) {
+        int64_t dt = (int64_t)(dec_deadline - rt_tb_now());
+        uint64_t dn = dt <= 0 ? now : now + (uint64_t)dt * 1000000000ull / TB_HZ;
+        if (dn < next) next = dn;
+    }
+    if (next <= now + 1000000ull) return;                   /* less than 1 ms: keep spinning */
+    uint64_t ns = next - now - 400000ull;                    /* wake a bit early */
+    if (ns > 4000000ull) ns = 4000000ull;
+    plat_idle_wait(ns);
+    g_idle_sleep_ns += ns;
+}
+
+void *volatile g_poll_site RT_LOCAL; ppc_context *volatile g_poll_ctx RT_LOCAL;     /* hang reports: last poll point */
+/* RT_POLLSTRESS=1 (testing): every loop back-edge is a poll point instead of every 256th, which
+   makes timing races between guest threads show up in seconds instead of hours */
+static void poll_stress(void) {
+    static int on = -1; if (on < 0) on = getenv("RT_POLLSTRESS") != NULL;
+    if (on) ppc_poll_counter = 0xFFFFFFFFu;
+}
+static uint64_t rt_hash64(const void *p, size_t n) { const uint8_t *b = p; uint64_t h = 1469598103934665603ull; for (size_t i = 0; i < n; i++) { h ^= b[i]; h *= 1099511628211ull; } return h; }
 void ppc_poll(ppc_context *ctx, uint8_t *base) {
+    g_poll_site = __builtin_return_address(0); g_poll_ctx = ctx;
+    poll_stress();
+    if (g_det) {
+        g_vt_ns += VT_POLL_NS;
+        static int dbg = -1; static uint64_t last RT_LOCAL; if (dbg < 0) dbg = getenv("RT_DET_DEBUG") != NULL;
+        if (dbg && rt_now_ns() - last > 2000000000ull) { extern uint64_t g_vi_fields; last = rt_now_ns();
+            rt_log("det", "vt %.3f s, fields %llu, lr %08X (%s), msr %08X", (g_vt_ns - det_t0) / 1e9, (unsigned long long)g_vi_fields, ctx->lr, rt_func_name(ctx->lr, NULL), ctx->msr); }
+    }
+    {   static long lf = -2, lt; if (lf == -2) { const char *e = getenv("RT_POLL_LOG"); lf = -1; if (e) sscanf(e, "%ld,%ld", &lf, &lt); }   /* testing: every poll */
+        extern uint64_t g_vi_fields;
+        if (lf >= 0 && (long)g_vi_fields >= lf && (long)g_vi_fields <= lt)
+            rt_log("poll", "f %llu vt %llu lr %08X r1 %08X r3 %08X t %d cnt %u regs %016llx", (unsigned long long)g_vi_fields, (unsigned long long)g_vt_ns, ctx->lr, ctx->r[1], ctx->r[3], cur == &main_thread ? -1 : (int)(cur - thread_pool), ppc_poll_counter, (unsigned long long)rt_hash64(ctx, sizeof *ctx)); }
     hw_update();
     if (!(ctx->msr & 0x8000u)) return;
-    if (pi_active()) { take_exception(ctx, base, EXC_EXTERNAL); return; }
+    if (pi_active()) {
+        {   static long lf = -2, lt; if (lf == -2) { const char *e = getenv("RT_POLL_LOG"); lf = -1; if (e) sscanf(e, "%ld,%ld", &lf, &lt); }
+            extern uint64_t g_vi_fields; extern uint32_t pi_intsr_dbg(void), pi_intmr_dbg(void);
+            if (lf >= 0 && (long)g_vi_fields >= lf && (long)g_vi_fields <= lt) rt_log("poll", "external: intsr %08X intmr %08X", pi_intsr_dbg(), pi_intmr_dbg()); }
+        take_exception(ctx, base, EXC_EXTERNAL); return; }
+    if (ev_n) {                                              /* native events (completion callbacks) */
+        static int reg; if (!reg) { reg = 1; rt_register_native(EV_HANDLER, ev_dispatch); }
+        take_exception_at(ctx, base, EXC_EXTERNAL, EV_HANDLER); return; }
     if (dec_armed && (int64_t)(rt_tb_now() - dec_deadline) >= 0) {
         dec_armed = 0;
+        {   static int lg = -1; if (lg < 0) lg = getenv("RT_DEC_LOG") != NULL;     /* testing: decrementer timing */
+            if (lg) { extern uint64_t g_vi_fields; rt_log("dec", "field %llu vt %llu tb %llu deadline %llu lr %08X", (unsigned long long)g_vi_fields, (unsigned long long)g_vt_ns, (unsigned long long)rt_tb_now(), (unsigned long long)dec_deadline, ctx->lr); } }
         take_exception(ctx, base, EXC_DECREMENTER);
+        return;
+    }
+    if (defer_mode > 0) maybe_force_resched(ctx, base);
+    idle_wait(ctx);
+}
+
+
+/* state for hang reports (printed by rt_dump_trace) */
+void rt_hang_state(void) {
+    extern uint32_t pi_intsr_dbg(void), pi_intmr_dbg(void);
+    ppc_context *c = g_poll_ctx;
+    fprintf(stderr, "cpu: fiber %p (main %p) npoll %d | last poll from host %p", (void *)cur, (void *)&main_thread, cur ? cur->npoll : -1, g_poll_site);
+#ifdef _WIN32
+    fprintf(stderr, " (image+0x%llX)", (unsigned long long)((uintptr_t)g_poll_site - (uintptr_t)GetModuleHandleA(NULL)));
+#endif
+    if (c) {
+        fprintf(stderr, "\n     msr %08X lr %08X (%s) r1 %08X r3 %08X r13 %08X", c->msr, c->lr, rt_func_name(c->lr, NULL), c->r[1], c->r[3], c->r[13]);
+        if (sda_ok(c->r[13]))                          /* (never read MMIO from here: this may run on the watchdog thread) */
+            fprintf(stderr, "\n     RunQueueBits %08X Reschedule %d RunQueueHint %d current ctx %08X",
+                    R32(c->r[13] - 20344), (int)R32(c->r[13] - 20352), (int)R32(c->r[13] - 20348), R32(0x800000D4));
+    }
+    fprintf(stderr, "\n     PI intsr %08X intmr %08X | dec armed %d in %lld ticks | preemptions deferred %llu, forced %llu\n", pi_intsr_dbg(), pi_intmr_dbg(), dec_armed,
+            (long long)(dec_deadline - rt_tb_now()), (unsigned long long)g_resched_deferred, (unsigned long long)g_resched_forced);
+    if (c && sda_ok(c->r[13])) {                       /* the game's disc command queue (mDvd): r13-21076 = manager */
+        uint32_t mgr = R32(c->r[13] - 21076);
+        if (mgr >= 0x80000000u && mgr < 0x81800000u) fprintf(stderr, "     mDvd command queue: first %08X last %08X\n", R32(mgr + 24), R32(mgr + 28));
     }
 }
 
@@ -622,7 +949,7 @@ static void setup_low_memory(void) {
     W32(0x80003184, 0x80000000); W32(0x80003194, 0); W32(0x80003198, 0x0F800000 >> 2);
     W32(0x80003188, 0x0035161F);                           /* IOS the apploader says the game needs */
     /* setting.txt (encrypted) is left at 0x3800 by the system menu */
-    { char sp[1200]; size_t sl; snprintf(sp, sizeof sp, "%s/nand/title/00000001/00000002/data/setting.txt", g_root);
+    { char sp[1200]; size_t sl; snprintf(sp, sizeof sp, "%s/title/00000001/00000002/data/setting.txt", rt_nand_root());
       uint8_t *st = read_file(sp, &sl); if (st) { memcpy(G(0x80003800), st, sl > 0x100 ? 0x100 : sl); free(st); }
       else rt_log("boot", "no setting.txt - run tools/make_nand.py"); }
     /* what the apploader leaves: bi2 and the FST at the top of MEM1, arena below them */
@@ -642,6 +969,15 @@ static void setup_low_memory(void) {
     rt_log("boot", "FST at %08X (%u bytes), bi2 at %08X", fst_addr, fst_max, bi2_addr);
 }
 
+static void guest_boot(void *arg) {
+    (void)arg;
+    ppc_context *ctx = &main_thread.ctx;
+    ctx->msr = 0x00002032;                 /* FP, IR, DR, RI */
+    ctx->r[1] = 0x816FFFF0;
+    rt_log("boot", "jumping to __start");
+    ppc_call_indirect(ctx, g_base, 0x80004050);
+    rt_fatal("__start returned");
+}
 int main(int argc, char **argv) {
     if (argc >= 3) {
         snprintf(g_root, sizeof g_root, "%s", argv[1]);
@@ -665,28 +1001,25 @@ int main(int argc, char **argv) {
         else snprintf(g_disc, sizeof g_disc, "%s/../extracted", g_root);
     }
     for (int i = 3; i < argc; i++) if (!strcmp(argv[i], "-v")) g_verbose = 1;
-#ifdef _WIN32
-    g_base = VirtualAlloc(NULL, 0x40000000ull, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    g_base = rt_layout_init();                     /* (fixed addresses: rt_state.c) */
     if (!g_base) rt_fatal("cannot allocate guest memory");
-#else
-    g_base = mmap(NULL, 0x40000000ull, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (g_base == MAP_FAILED) rt_fatal("cannot allocate guest memory");
-#endif
     t0_ns = rt_now_ns();
+    {   const char *e = getenv("RT_DETERMINISTIC");
+        if (e && *e != '0') { g_det = 1; det_t0 = g_vt_ns; rt_log("cpu", "deterministic mode: virtual clock (%llu ns per poll)", (unsigned long long)VT_POLL_NS); } }
     plat_init();
+    update_install_pending();                      /* (an update downloaded last time: before anything opens its files) */
+    update_begin();
     load_dol();
     void mod_load(void); mod_load();
     if (disc_init()) rt_fatal("cannot open disc files in %s", g_disc);
     setup_low_memory();
     hw_init(); ios_init(); gx_init();
-    main_thread.fiber = plat_fiber_main();
+    /* the guest's main thread runs on a fiber of its own (rt_state.c: its stack is part of a
+       save state); main's stack stays the host fiber, where save states are loaded */
+    plat_fiber_main();
+    main_thread.fiber = plat_fiber_create(guest_boot, NULL);
     cur = &main_thread;
-    ppc_context *ctx = &main_thread.ctx;
-    ctx->msr = 0x00002032;                 /* FP, IR, DR, RI */
-    ctx->r[1] = 0x816FFFF0;
-    rt_log("boot", "jumping to __start");
-    ppc_call_indirect(ctx, g_base, 0x80004050);
-    rt_fatal("__start returned");
+    rt_state_host_loop(main_thread.fiber);
     return 0;
 }
 

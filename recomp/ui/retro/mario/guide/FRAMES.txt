@@ -1,0 +1,264 @@
+Sprite sheet templates for the retro characters (white boxes, one per animation frame).
+
+    python tools/make_retro_templates.py [character]      (default: mario)
+
+Writes ui/retro/<character>/:
+  <form>.png          the sheet to paint over - one white box per frame, transparent around
+                      them. Once anything is painted on it, it is never overwritten (your art
+                      is safe); a sheet that is still only white boxes is rewritten when the
+                      layout changes.
+  frames.json         where each frame is in each sheet (x, y, w, h) - the game reads this,
+                      so the layout can change without code changes. A painted sheet keeps its
+                      entry, so frames can be moved on the art and their positions written here
+                      by hand (16x16 / 16x32 box per frame).
+  guide/<form>.png    the same layout 8x bigger with each frame's name (always regenerated)
+
+Conventions (same as the 8-bit original): 1 pixel = 1 game unit (a block is 16x16), everything
+faces right (left is mirrored), feet on the bottom edge of the box, centred horizontally.
+Small forms use 16x16 boxes, big forms 16x32. Frames marked "optional" in the guide can be
+left as white boxes / empty: the game falls back to the frame named in FALLBACK.
+
+
+small.png (16x16)
+   1. idle         standing still
+   2. walk1        walk/run cycle 1
+   3. walk2        walk/run cycle 2
+   4. walk3        walk/run cycle 3
+   5. skid         turning around at speed
+   6. jump         in the air (going up)
+   7. fall         in the air (going down) - optional, uses jump
+   8. swim1        swim frame 1
+   9. swim2        swim frame 1, feet kicking
+  10. swim3        swim frame 2
+  11. swim4        swim frame 2, feet kicking
+  12. swim5        swim frame 3
+  13. swim6        swim frame 3, feet kicking
+  14. swim7        swim 7 - optional, not used yet
+  15. swim8        swim 8 - optional, not used yet
+  16. climb1       climbing vine/fence 1
+  17. climb2       climbing vine/fence 2
+  18. hang1        hanging from rope/bar 1 - optional, uses climb1
+  19. hang2        hanging 2 - optional, uses climb2
+  20. carry_idle   holding a shell/block - optional, uses idle
+  21. carry_walk1  carrying, walk 1 - optional, uses walk1
+  22. carry_walk2  carrying, walk 2 - optional, uses walk2
+  23. carry_walk3  carrying, walk 3 - optional, uses walk3
+  24. throw        throwing what was carried - optional, uses walk2
+  25. kick         kicking a shell - optional, uses walk2
+  26. flagpole1    sliding down the flagpole 1
+  27. flagpole2    sliding down the flagpole 2
+  28. back         facing away (going through a door) - optional, uses idle
+  29. front        facing the screen (pipe going down) - optional, uses idle
+  30. victory      goal pose - optional, uses idle
+  31. death        losing a life (only the small sheet)
+
+super.png (16x32)
+   1. idle         standing still
+   2. walk1        walk/run cycle 1
+   3. walk2        walk/run cycle 2
+   4. walk3        walk/run cycle 3
+   5. skid         turning around at speed
+   6. jump         in the air (going up)
+   7. fall         in the air (going down) - optional, uses jump
+   8. swim1        swim frame 1
+   9. swim2        swim frame 1, feet kicking
+  10. swim3        swim frame 2
+  11. swim4        swim frame 2, feet kicking
+  12. swim5        swim frame 3
+  13. swim6        swim frame 3, feet kicking
+  14. swim7        swim 7 - optional, not used yet
+  15. swim8        swim 8 - optional, not used yet
+  16. climb1       climbing vine/fence 1
+  17. climb2       climbing vine/fence 2
+  18. hang1        hanging from rope/bar 1 - optional, uses climb1
+  19. hang2        hanging 2 - optional, uses climb2
+  20. carry_idle   holding a shell/block - optional, uses idle
+  21. carry_walk1  carrying, walk 1 - optional, uses walk1
+  22. carry_walk2  carrying, walk 2 - optional, uses walk2
+  23. carry_walk3  carrying, walk 3 - optional, uses walk3
+  24. throw        throwing what was carried - optional, uses walk2
+  25. kick         kicking a shell - optional, uses walk2
+  26. flagpole1    sliding down the flagpole 1
+  27. flagpole2    sliding down the flagpole 2
+  28. back         facing away (going through a door) - optional, uses idle
+  29. front        facing the screen (pipe going down) - optional, uses idle
+  30. victory      goal pose - optional, uses idle
+  31. crouch       crouching (big forms only)
+  32. grow         between small and big while powering up/down (feet at the bottom)
+
+fire.png (16x32)
+   1. idle         standing still
+   2. walk1        walk/run cycle 1
+   3. walk2        walk/run cycle 2
+   4. walk3        walk/run cycle 3
+   5. skid         turning around at speed
+   6. jump         in the air (going up)
+   7. fall         in the air (going down) - optional, uses jump
+   8. swim1        swim frame 1
+   9. swim2        swim frame 1, feet kicking
+  10. swim3        swim frame 2
+  11. swim4        swim frame 2, feet kicking
+  12. swim5        swim frame 3
+  13. swim6        swim frame 3, feet kicking
+  14. swim7        swim 7 - optional, not used yet
+  15. swim8        swim 8 - optional, not used yet
+  16. climb1       climbing vine/fence 1
+  17. climb2       climbing vine/fence 2
+  18. hang1        hanging from rope/bar 1 - optional, uses climb1
+  19. hang2        hanging 2 - optional, uses climb2
+  20. carry_idle   holding a shell/block - optional, uses idle
+  21. carry_walk1  carrying, walk 1 - optional, uses walk1
+  22. carry_walk2  carrying, walk 2 - optional, uses walk2
+  23. carry_walk3  carrying, walk 3 - optional, uses walk3
+  24. throw        throwing what was carried - optional, uses walk2
+  25. kick         kicking a shell - optional, uses walk2
+  26. flagpole1    sliding down the flagpole 1
+  27. flagpole2    sliding down the flagpole 2
+  28. back         facing away (going through a door) - optional, uses idle
+  29. front        facing the screen (pipe going down) - optional, uses idle
+  30. victory      goal pose - optional, uses idle
+  31. crouch       crouching (big forms only)
+  32. shoot        throwing a fireball
+
+ice.png (16x32)
+   1. idle         standing still
+   2. walk1        walk/run cycle 1
+   3. walk2        walk/run cycle 2
+   4. walk3        walk/run cycle 3
+   5. skid         turning around at speed
+   6. jump         in the air (going up)
+   7. fall         in the air (going down) - optional, uses jump
+   8. swim1        swim frame 1
+   9. swim2        swim frame 1, feet kicking
+  10. swim3        swim frame 2
+  11. swim4        swim frame 2, feet kicking
+  12. swim5        swim frame 3
+  13. swim6        swim frame 3, feet kicking
+  14. swim7        swim 7 - optional, not used yet
+  15. swim8        swim 8 - optional, not used yet
+  16. climb1       climbing vine/fence 1
+  17. climb2       climbing vine/fence 2
+  18. hang1        hanging from rope/bar 1 - optional, uses climb1
+  19. hang2        hanging 2 - optional, uses climb2
+  20. carry_idle   holding a shell/block - optional, uses idle
+  21. carry_walk1  carrying, walk 1 - optional, uses walk1
+  22. carry_walk2  carrying, walk 2 - optional, uses walk2
+  23. carry_walk3  carrying, walk 3 - optional, uses walk3
+  24. throw        throwing what was carried - optional, uses walk2
+  25. kick         kicking a shell - optional, uses walk2
+  26. flagpole1    sliding down the flagpole 1
+  27. flagpole2    sliding down the flagpole 2
+  28. back         facing away (going through a door) - optional, uses idle
+  29. front        facing the screen (pipe going down) - optional, uses idle
+  30. victory      goal pose - optional, uses idle
+  31. crouch       crouching (big forms only)
+  32. shoot        throwing an ice ball
+
+propeller.png (16x32)
+   1. idle         standing still
+   2. walk1        walk/run cycle 1
+   3. walk2        walk/run cycle 2
+   4. walk3        walk/run cycle 3
+   5. skid         turning around at speed
+   6. jump         in the air (going up)
+   7. fall         in the air (going down) - optional, uses jump
+   8. swim1        swim frame 1
+   9. swim2        swim frame 1, feet kicking
+  10. swim3        swim frame 2
+  11. swim4        swim frame 2, feet kicking
+  12. swim5        swim frame 3
+  13. swim6        swim frame 3, feet kicking
+  14. swim7        swim 7 - optional, not used yet
+  15. swim8        swim 8 - optional, not used yet
+  16. climb1       climbing vine/fence 1
+  17. climb2       climbing vine/fence 2
+  18. hang1        hanging from rope/bar 1 - optional, uses climb1
+  19. hang2        hanging 2 - optional, uses climb2
+  20. carry_idle   holding a shell/block - optional, uses idle
+  21. carry_walk1  carrying, walk 1 - optional, uses walk1
+  22. carry_walk2  carrying, walk 2 - optional, uses walk2
+  23. carry_walk3  carrying, walk 3 - optional, uses walk3
+  24. throw        throwing what was carried - optional, uses walk2
+  25. kick         kicking a shell - optional, uses walk2
+  26. flagpole1    sliding down the flagpole 1
+  27. flagpole2    sliding down the flagpole 2
+  28. back         facing away (going through a door) - optional, uses idle
+  29. front        facing the screen (pipe going down) - optional, uses idle
+  30. victory      goal pose - optional, uses idle
+  31. crouch       crouching (big forms only)
+  32. spin1        propeller spin, going up 1
+  33. spin2        propeller spin 2
+  34. spin3        propeller spin 3
+  35. spin4        propeller spin 4
+  36. float1       slow fall after the spin 1
+  37. float2       slow fall 2
+  38. drill        spinning dive down
+
+penguin.png (16x32)
+   1. idle         standing still
+   2. walk1        walk/run cycle 1
+   3. walk2        walk/run cycle 2
+   4. walk3        walk/run cycle 3
+   5. skid         turning around at speed
+   6. jump         in the air (going up)
+   7. fall         in the air (going down) - optional, uses jump
+   8. swim1        swim frame 1
+   9. swim2        swim frame 1, feet kicking
+  10. swim3        swim frame 2
+  11. swim4        swim frame 2, feet kicking
+  12. swim5        swim frame 3
+  13. swim6        swim frame 3, feet kicking
+  14. swim7        swim 7 - optional, not used yet
+  15. swim8        swim 8 - optional, not used yet
+  16. climb1       climbing vine/fence 1
+  17. climb2       climbing vine/fence 2
+  18. hang1        hanging from rope/bar 1 - optional, uses climb1
+  19. hang2        hanging 2 - optional, uses climb2
+  20. carry_idle   holding a shell/block - optional, uses idle
+  21. carry_walk1  carrying, walk 1 - optional, uses walk1
+  22. carry_walk2  carrying, walk 2 - optional, uses walk2
+  23. carry_walk3  carrying, walk 3 - optional, uses walk3
+  24. throw        throwing what was carried - optional, uses walk2
+  25. kick         kicking a shell - optional, uses walk2
+  26. flagpole1    sliding down the flagpole 1
+  27. flagpole2    sliding down the flagpole 2
+  28. back         facing away (going through a door) - optional, uses idle
+  29. front        facing the screen (pipe going down) - optional, uses idle
+  30. victory      goal pose - optional, uses idle
+  31. crouch       crouching (big forms only)
+  32. slide        belly slide
+  33. shoot        throwing an ice ball
+  34. pswim1       penguin swim 1 - optional, uses swim1
+  35. pswim2       penguin swim 2 - optional, uses swim2
+
+mini.png (16x16)
+   1. idle         standing still
+   2. walk1        walk/run cycle 1
+   3. walk2        walk/run cycle 2
+   4. walk3        walk/run cycle 3
+   5. skid         turning around at speed
+   6. jump         in the air (going up)
+   7. fall         in the air (going down) - optional, uses jump
+   8. swim1        swim frame 1
+   9. swim2        swim frame 1, feet kicking
+  10. swim3        swim frame 2
+  11. swim4        swim frame 2, feet kicking
+  12. swim5        swim frame 3
+  13. swim6        swim frame 3, feet kicking
+  14. swim7        swim 7 - optional, not used yet
+  15. swim8        swim 8 - optional, not used yet
+  16. climb1       climbing vine/fence 1
+  17. climb2       climbing vine/fence 2
+  18. hang1        hanging from rope/bar 1 - optional, uses climb1
+  19. hang2        hanging 2 - optional, uses climb2
+  20. carry_idle   holding a shell/block - optional, uses idle
+  21. carry_walk1  carrying, walk 1 - optional, uses walk1
+  22. carry_walk2  carrying, walk 2 - optional, uses walk2
+  23. carry_walk3  carrying, walk 3 - optional, uses walk3
+  24. throw        throwing what was carried - optional, uses walk2
+  25. kick         kicking a shell - optional, uses walk2
+  26. flagpole1    sliding down the flagpole 1
+  27. flagpole2    sliding down the flagpole 2
+  28. back         facing away (going through a door) - optional, uses idle
+  29. front        facing the screen (pipe going down) - optional, uses idle
+  30. victory      goal pose - optional, uses idle

@@ -4,6 +4,7 @@
  * Command replies follow Dolphin's BTEmu. Wii Remote (L2CAP/HID) lives in rt_wiimote.c. */
 #include "rt.h"
 #include "rt_bt.h"
+RT_STATE_FILE                                   /* (this file's variables are part of a save state: rt_state.c) */
 
 void ios_reply(uint32_t req, int32_t result);
 

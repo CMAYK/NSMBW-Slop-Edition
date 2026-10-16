@@ -1032,7 +1032,7 @@ void ui_image(int tex, float x, float y, float w, float h, float u0, float v0, f
 }
 /* register a 0xAARRGGBB image for ui_image; returns its id (0 on failure) */
 int ui_register_texture(const uint32_t *argb, int w, int h) {
-    if (ui_ntex >= 8) return 0;
+    if (!gl_on || ui_ntex >= 8) return 0;              /* (software renderer: no GL; the menus aren't drawn there) */
     GLuint t; glGenTextures(1, &t); gl_unit(15); glBindTexture(GL_TEXTURE_2D, t); bound_tex[15] = t;
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, argb);

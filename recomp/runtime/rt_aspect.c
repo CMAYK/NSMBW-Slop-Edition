@@ -3,6 +3,7 @@
  * letterboxing code can be located. */
 #include "rt.h"
 #include <math.h>
+RT_STATE_FILE                                   /* (this file's variables are part of a save state: rt_state.c) */
 extern uint64_t g_frames_presented;
 
 /* 4:3 mode: settings.ini aspect_4_3 = 1 (default), RT_AR43 overrides */
@@ -37,8 +38,13 @@ void hle_GXSetViewport(ppc_context *ctx, uint8_t *base) {
 }
 void hle_GXSetScissor(ppc_context *ctx, uint8_t *base) {
     /* m2d layouts flagged to clip to the letterboxed picture (fn_80007010: world map HUD, prompts)
-       get the whole screen in 4:3 mode, where the picture has no letterbox */
-    if (ctx->lr == 0x80007198u && ar43()) { ctx->r[3] = 0; ctx->r[4] = 0; ctx->r[5] = 640; ctx->r[6] = 456; }
+       get the whole screen in 4:3 mode, where the picture has no letterbox. Only a clip that is
+       such a band (the picture's full width) - a layout clipped to a window of its own (the
+       character select cards: N_scissorArea_00) keeps it, or what slides past the window shows */
+    if (ctx->lr == 0x80007198u && ar43()) {
+        log_once("m2d clip (4:3, as asked)", ctx->lr, "%u %u %u %u", ctx->r[3], ctx->r[4], ctx->r[5], ctx->r[6]);
+        if (ctx->r[3] == 0 && ctx->r[5] >= 600) { ctx->r[3] = 0; ctx->r[4] = 0; ctx->r[5] = 640; ctx->r[6] = 456; }
+    }
     log_once("scissor", ctx->lr, "%u %u %u %u", ctx->r[3], ctx->r[4], ctx->r[5], ctx->r[6]);
     orig_GXSetScissor(ctx, base);
 }
